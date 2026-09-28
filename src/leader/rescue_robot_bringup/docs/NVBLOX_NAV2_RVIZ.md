@@ -39,6 +39,8 @@ RViz의 Fixed Frame은 `odom`이고
 계산된 경로는 주황색 `Nav2 Plan` 표시(`/plan`)에서 확인한다.
 로봇 가까이, 현재 확인된 자유 공간에 작은 목표를 지정한다. `/nav2/cmd_vel`은
 바퀴 브리지의 `/leader/cmd_vel`과 연결되지 않아 이 구성만으로 바퀴는 움직이지 않는다.
+`Nav2 Plan`은 메시 위에 그리도록 RViz에서 Z 오프셋 0.2 m로 설정했다.
+RViz를 이미 실행 중이었다면 변경된 `vslam_nvblox.rviz` 파일로 다시 실행한다.
 
 ```bash
 ros2 lifecycle get /planner_server
@@ -50,5 +52,21 @@ ros2 topic info /plan
 ros2 topic info /nav2/cmd_vel
 ```
 
+`Nav2 Goal`로 목표를 지정하기 전에 다른 터미널에서
+`ros2 topic echo --once /plan --field header.frame_id`를 실행하면
+계획 성공 시 `odom`이 출력된다. 목표는 global costmap의 알려진 자유 공간에
+설정해야 하며, 경로가 없으면 planner 로그와 목표 좌표를 확인한다.
+
 활성 상태는 각각 `active [3]`이어야 하고 slice 구독자는 두 costmap이다.
 `/nav2/cmd_vel`에는 controller publisher 하나와 subscriber 0개가 있어야 한다.
+
+로컬 costmap은 `/local_costmap/costmap`에서 발행하고, 호환 토픽
+`/costmap/costmap`에도 같은 `nav_msgs/msg/OccupancyGrid`를 발행한다.
+두 토픽 모두 `header.frame_id`가 `odom`이며, 호환 토픽은 전체 `data` 배열을
+2 Hz로 제공한다.
+통합 launch를 재시작한 뒤 다음 명령으로 확인한다.
+
+```bash
+ros2 topic echo --once /costmap/costmap
+ros2 topic hz /costmap/costmap
+```

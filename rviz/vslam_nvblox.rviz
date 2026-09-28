@@ -13,7 +13,6 @@ Panels:
     Name: Selection
   - Class: rviz_common/Tool Properties
     Expanded:
-      - /2D Goal Pose1
       - /Publish Point1
     Name: Tool Properties
     Splitter Ratio: 0.5886790156364441
@@ -26,7 +25,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: PointCloud2
 Visualization Manager:
   Class: ""
   Displays:
@@ -56,6 +55,8 @@ Visualization Manager:
         base_footprint:
           Value: true
         base_link:
+          Value: true
+        cad_model_link:
           Value: true
         camera_aligned_depth_to_infra1_frame:
           Value: true
@@ -95,8 +96,6 @@ Visualization Manager:
           Value: true
         lower_body_plate_link:
           Value: true
-        map:
-          Value: true
         odom:
           Value: true
         rear_left_post_link:
@@ -121,58 +120,59 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        map:
-          odom:
-            base_link:
-              camera_link:
-                camera_aligned_depth_to_infra1_frame:
-                  camera_infra1_optical_frame:
-                    {}
-                camera_color_frame:
-                  camera_color_optical_frame:
-                    {}
-                camera_depth_frame:
-                  camera_depth_optical_frame:
-                    {}
-                camera_infra1_frame:
+        odom:
+          base_link:
+            cad_model_link:
+              {}
+            camera_link:
+              camera_aligned_depth_to_infra1_frame:
+                camera_infra1_optical_frame:
                   {}
-                camera_infra2_frame:
-                  camera_infra2_optical_frame:
-                    {}
-              front_left_post_link:
+              camera_color_frame:
+                camera_color_optical_frame:
+                  {}
+              camera_depth_frame:
+                camera_depth_optical_frame:
+                  {}
+              camera_infra1_frame:
                 {}
-              front_right_post_link:
-                {}
-              gripper_bridge_link:
-                {}
-              gripper_connector_link:
-                {}
-              imu_link:
-                {}
-              left_gripper_arm_link:
-                {}
-              left_gripper_tip_link:
-                {}
-              left_wheel_link:
-                {}
-              lower_body_plate_link:
-                {}
-              rear_left_post_link:
-                {}
-              rear_right_post_link:
-                {}
-              right_gripper_arm_link:
-                {}
-              right_gripper_tip_link:
-                {}
-              right_wheel_link:
-                {}
-              sensor_plate_link:
-                {}
-              top_front_bridge_link:
-                {}
-              top_rear_bridge_link:
-                {}
+              camera_infra2_frame:
+                camera_infra2_optical_frame:
+                  {}
+            front_left_post_link:
+              {}
+            front_right_post_link:
+              {}
+            gripper_bridge_link:
+              {}
+            gripper_connector_link:
+              {}
+            imu_link:
+              {}
+            left_gripper_arm_link:
+              {}
+            left_gripper_tip_link:
+              {}
+            left_wheel_link:
+              {}
+            lower_body_plate_link:
+              {}
+            rear_left_post_link:
+              {}
+            rear_right_post_link:
+              {}
+            right_gripper_arm_link:
+              {}
+            right_gripper_tip_link:
+              {}
+            right_wheel_link:
+              {}
+            sensor_plate_link:
+              {}
+            top_front_bridge_link:
+              {}
+            top_rear_bridge_link:
+              {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -211,16 +211,16 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 255; 255
-      Color Transformer: ""
+      Color Transformer: Intensity
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 4096
+      Max Intensity: 2
       Min Color: 0; 0; 0
-      Min Intensity: 0
+      Min Intensity: -0.873212456703186
       Name: PointCloud2
-      Position Transformer: ""
+      Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.009999999776482582
@@ -263,20 +263,22 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /visual_slam/tracking/vo_path
       Value: true
-    - Class: rviz_default_plugins/Path
-      Color: 255; 90; 0
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 255; 150; 0
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
-      Line Style: Lines
-      Line Width: 0.05000000074505806
+      Line Style: Billboards
+      Line Width: 0.14000000059604645
       Name: Nav2 Plan
       Offset:
         X: 0
         Y: 0
-        Z: 0
-      Pose Color: 255; 90; 0
+        Z: 0.20000000298023224
+      Pose Color: 255; 150; 0
       Pose Style: None
       Radius: 0.029999999329447746
       Shaft Diameter: 0.10000000149011612
@@ -306,7 +308,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Value: true
-      Enabled: true
+      Enabled: false
       Keep: 100
       Name: Odometry
       Position Tolerance: 0.10000000149011612
@@ -327,7 +329,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /visual_slam/vis/slam_odometry
-      Value: true
+      Value: false
     - Ceiling Height: 1.5
       Class: nvblox_rviz_plugin/NvbloxMesh
       Cut Ceiling: false
@@ -345,11 +347,10 @@ Visualization Manager:
       Enabled: true
       Name: Survivor Raw
       Namespaces:
-        survivor_current: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
-        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /leader/survivor/map_markers
@@ -358,11 +359,10 @@ Visualization Manager:
       Enabled: true
       Name: Survivor Registry
       Namespaces:
-        survivor_registry: true
+        {}
       Topic:
         Depth: 1
         Durability Policy: Transient Local
-        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /leader/survivor/registry_markers
@@ -421,7 +421,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 16.662004470825195
+      Distance: 4.901374340057373
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -436,10 +436,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4047962427139282
+      Pitch: 1.2297961711883545
       Target Frame: base_link
       Value: Orbit (rviz)
-      Yaw: 4.0803985595703125
+      Yaw: 4.120398044586182
     Saved:
       - Class: rviz_default_plugins/Orbit
         Distance: 13.162692070007324

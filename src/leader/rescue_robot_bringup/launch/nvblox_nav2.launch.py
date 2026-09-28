@@ -16,6 +16,12 @@ def generate_launch_description():
     through_tree_file = os.path.join(config_dir, "navigate_through_poses_nvblox.xml")
     nodes = [
         Node(
+            package="rescue_robot_bringup",
+            executable="costmap_topic_alias.py",
+            name="costmap_topic_alias",
+            output="screen",
+        ),
+        Node(
             package="nav2_planner",
             executable="planner_server",
             name="planner_server",
