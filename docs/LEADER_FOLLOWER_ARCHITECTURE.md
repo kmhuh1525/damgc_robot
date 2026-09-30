@@ -58,6 +58,8 @@ velocity topic까지 구현됐지만 STM32/UART/motor에는 연결되지 않았�
 | `/cooperation/state` | 협동 운반 상태 (`std_msgs/String`) | 리더 발행 구현 |
 | `/cooperation/target_velocity` | 협동 운반 공통 속도 (`geometry_msgs/Twist`) | 리더 발행 구현 |
 | `/mission/state` | 전체 임무 상태 (`std_msgs/String`) | 리더 발행 구현 |
+| `/mission/follower_command` | 리더→팔로워 미션 명령 (`std_msgs/String` JSON, seq/ACK) | `cooperative_mission` 구현 |
+| `/follower/mission/status` | 팔로워 미션 상태·ACK (`std_msgs/String` JSON) | `cooperative_mission` 구현 |
 
 ### Orin–STM32
 
@@ -178,6 +180,15 @@ Grace는 blind forward가 아니며 blind final 기본값은 false다. Source st
 identity, local monotonic receipt는 dropout 판정에 사용하고 duplicate TF는 grace를
 reset하지 않는다. Controller enable/disable로 새 approach session이 시작되면 이전
 ALIGNED latch도 reset한다.
+
+## 협동 미션 (cooperative_mission)
+
+리더 `mission_coordinator`가 전체 시나리오(태그 탐색·정렬·파지 → 팔로워 반대편 파지 → 동시
+리프트 → 1초 협동 직진)를 진행하고, 팔로워 `mission_executor`가 ACK 기반 명령을 수행한다.
+미션 launch에서는 리더 guard 입력이 `/leader/mission/cmd_vel_raw`, 팔로워 selector의
+COOPERATION 입력이 `/follower/mission/cmd_vel`로 바뀐다. `/cooperation/target_velocity`는
+리더 좌표 공통 속도이며, 마주 보는 팔로워는 `linear.x` 부호를 반전해 추종한다.
+자세한 내용은 [cooperative_mission README](../src/cooperative_mission/README.md)를 참고한다.
 
 ## 향후 연결 지점
 

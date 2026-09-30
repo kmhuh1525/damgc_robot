@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd"?>
+<package format="3">
+  <name>cooperative_mission</name>
+  <version>0.1.0</version>
+  <description>
+    Leader/Follower mission coordinator: Leader AprilTag grasp, Follower
+    opposite-side grasp, synchronized lift and cooperative straight transport.
+  </description>
+  <maintainer email="maze@todo.todo">maze</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+
+  <!-- Pipelines reused by the mission launch files. -->
+  <exec_depend>follower_approach_control</exec_depend>
+  <exec_depend>follower_command_selector</exec_depend>
+  <exec_depend>follower_control</exec_depend>
+  <exec_depend>follower_supply_perception</exec_depend>
+  <exec_depend>leader_approach_control</exec_depend>
+  <exec_depend>rescue_robot_bringup</exec_depend>
+  <exec_depend>rescue_robot_tools</exec_depend>
+  <exec_depend>stm32_bridge</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

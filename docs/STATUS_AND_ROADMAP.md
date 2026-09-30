@@ -25,9 +25,9 @@ pipeline, Survivor Stage 1·3·4·5 실기 검증과 Stage 2 구현 상태를 �
 | depth 기반 생존자 3차원 위치 | 완료(범위 내) | Stage 3 camera optical XYZ와 Stage 4 exact-timestamp TF2 map XYZ, `/leader/survivor/map_positions`를 실제 D435에서 검증 |
 | Nav2 자율주행 | 미구현 | Nav2 구성·지도·주행 시험 없음 |
 | AprilTag 물품 인식·정밀 접근 | 부분 완료 | 양 로봇 camera/base alignment와 guarded software velocity 구현; 실제 접근·파지 검증 필요 |
-| 그리퍼 물품 파지 | 확인 필요 | URDF 형상만 있고 제어 코드·실물 시험 근거 없음 |
+| 그리퍼 물품 파지 | 부분 완료 | Dynamixel RX-28/RX-64 노드와 `cooperative_mission`의 ALIGNED→닫기·동시 리프트 구현(2026-09-30); 실물 파지 시험 필요 |
 | 경량 물품 단독 운반 | 미구현 | 접근·파지·주행 연결 없음 |
-| 중량 물품 협동 운반 | 부분 완료 | 리더 DDS 상태·속도 게이트 구현, 팔로워 heartbeat/하드웨어 주행 시험 필요 |
+| 중량 물품 협동 운반 | 부분 완료 | `cooperative_mission`: 리더 파지 → 팔로워 반대편 파지 → ACK 기반 동시 리프트 → 공통 속도(팔로워 부호 반전) 1초 직진을 소프트웨어·시뮬레이션으로 검증(2026-09-30); 실물 시험 필요 |
 | 지도·생존자·로봇 상태 시각화 | 완료(범위 내) | RViz 3D map과 Stage 5 raw marker, Stage 6.1 persistent Registry sphere/text를 Jetson에서 동시 검증; LOST yellow LAST SEEN과 white text 포함 |
 
 ## 현재 저장소에서 재현 가능한 범위
@@ -96,7 +96,7 @@ Survivor ID, spatial deduplication, position stabilization이다.
 | 3차원 지도 5분 이상 생성 | 완료(범위 내) | 469.0초 rosbag에서 VSLAM, nvblox mesh/3D ESDF, RViz를 동시 검증 |
 | 사람과 AprilTag 검출 | 완료 | AprilTag와 Survivor Stage 1 완료; 사람 탐지는 실제 Jetson/D435에서 검증됨 |
 | 규격 물품 수동 파지 | 확인 필요 | 그리퍼 시험 기록 필요 |
-| 가짜 노드로 임무 상태 전체 순환 | 미구현 | Mission Coordinator 상태·전이 정의 필요 |
+| 가짜 노드로 임무 상태 전체 순환 | 완료(소프트웨어) | `cooperative_mission` 상태기계와 `test/sim_world.py` 가상 로봇·링크 시험(정상/단절/실패/재전송/release) |
 
 ### 3주차 게이트: 로봇 A 자율주행과 로봇 B 기본 구동
 

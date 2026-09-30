@@ -1,0 +1,57 @@
+# Follower mission executor (/follower/mission_executor).
+# NOTE: ROS 2 parameters are strictly typed. Keep a decimal point on every
+# float value (e.g. -1.0, not -1) or the node will refuse to start.
+/follower/mission_executor:
+  ros__parameters:
+    update_rate: 50.0
+    status_rate: 10.0
+    require_gripper: true
+
+    # --- Step 3: go to the opposite face -------------------------------------
+    # Optional wheel-odometry maneuver executed before the tag search, e.g. to
+    # drive around the object when the Follower does not start on the far side:
+    #   reposition_segments: ["turn:90", "drive:0.60", "turn:-90", "drive:0.80", "turn:-90"]
+    # turn:<deg> (+CCW, |deg| <= 180), drive:<m> (+forward), wait:<s>.
+    # [""] = no maneuver (Follower is already placed facing the far face).
+    reposition_segments: [""]
+    maneuver_drive_speed: 0.05
+    maneuver_min_drive_speed: 0.02
+    maneuver_turn_speed: 0.20
+    maneuver_min_turn_speed: 0.06
+    maneuver_drive_tolerance: 0.01
+    maneuver_turn_tolerance_deg: 2.0
+    odom_timeout: 0.5
+
+    target_tag_id: -1               # -1 = whatever tag the approach node selected
+    tag_acquire_time: 0.3
+    search_angular_speed: 0.15
+    search_direction: 1.0
+    search_step_angle_deg: 20.0
+    search_dwell_time: 0.6
+    search_max_angle_deg: 360.0
+    reacquire_timeout: 3.0
+    max_reacquire: 3
+    approach_timeout: 150.0
+    aligned_hold_time: 0.2
+
+    # Values copied from follower_apriltag_drive.launch.py; calibrate on the robot.
+    gripper_open_raw: 950
+    gripper_close_raw: 350
+    lift_raw: 300
+    lower_raw: 600
+    approach_rx64_raw: -1
+    rx64_min: 260
+    rx64_max: 670
+    grasp_settle_time: 2.0
+    lift_duration: 3.5
+    release_lower_time: 3.5
+    release_open_settle: 1.0
+
+    # --- Step 5: follow the Leader common velocity ---------------------------
+    leader_timeout: 1.0             # /mission/state heartbeat while moving
+    target_velocity_timeout: 0.25
+    leader_facing_opposite: true    # linear.x is negated (robots face each other)
+    max_transport_linear: 0.10
+    max_transport_angular: 0.30
+
+    action_timeout: 2.0

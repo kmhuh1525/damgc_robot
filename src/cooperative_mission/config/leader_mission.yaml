@@ -1,0 +1,58 @@
+# Leader mission coordinator (/leader/mission_coordinator).
+# NOTE: ROS 2 parameters are strictly typed. Keep a decimal point on every
+# float value (e.g. -1.0, not -1) or the node will refuse to start.
+/leader/mission_coordinator:
+  ros__parameters:
+    update_rate: 50.0
+    require_gripper: true
+
+    # --- Step 1: object tag ("QR code") search -------------------------------
+    target_tag_id: -1               # -1 = whatever tag the approach node selected
+    tag_acquire_time: 0.3           # s of continuous detection before approaching
+    search_angular_speed: 0.15      # rad/s, in-place step-and-dwell search
+    search_direction: 1.0           # +1.0 CCW, -1.0 CW
+    search_step_angle_deg: 20.0
+    search_dwell_time: 0.6
+    search_max_angle_deg: 360.0
+    reacquire_timeout: 3.0          # tag lost this long during approach -> search again
+    max_reacquire: 3
+    approach_timeout: 120.0
+    approach_command_timeout: 0.3
+    aligned_hold_time: 0.2
+
+    # --- Step 2: Leader gripper (RX-28 jaw / RX-64 lift arm) -----------------
+    # Values copied from leader_apriltag_drive.launch.py; calibrate on the robot.
+    gripper_open_raw: 1000
+    gripper_close_raw: 450
+    lift_raw: 300                   # RX-64 raised position (260..670)
+    lower_raw: 600                  # RX-64 lowered position used by /mission/release
+    approach_rx64_raw: -1           # -1 = do not move the arm while approaching
+    rx64_min: 260
+    rx64_max: 670
+    grasp_settle_time: 2.0          # s after the close command before continuing
+    # RX-64 speed 50 raw ~= 33 deg/s: 600 -> 300 raw (~87 deg) takes ~2.6 s.
+    lift_duration: 3.5
+    lift_ack_margin: 3.0
+    release_lower_time: 3.5
+    release_open_settle: 1.0
+
+    # --- Step 3/4: Follower coordination ------------------------------------
+    require_follower: true
+    follower_status_timeout: 1.0
+    follower_approach_timeout: 180.0
+    handshake_timeout: 5.0
+    command_resend_period: 0.2
+
+    # --- Step 5: cooperative straight transport ------------------------------
+    # Direction in the Leader base_link frame. The Follower, facing the Leader,
+    # receives the opposite linear.x so both move the same way in the world.
+    transport_direction: forward    # forward | backward
+    transport_speed: 0.05           # m/s cruise
+    transport_acceleration: 0.20    # m/s^2, must stay below both guards' limits
+    transport_duration: 1.0         # s, ramps included; command is zero afterwards
+    transport_leader_delay: 0.02    # s, compensates the Follower relay hop
+    transport_settle_time: 0.5
+    transport_status_timeout: 0.35
+    max_transport_speed: 0.10
+
+    action_timeout: 2.0

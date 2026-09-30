@@ -1,0 +1,27 @@
+# Leader final velocity guard for the cooperative mission.
+# Differences from leader_approach_control/config/velocity_guard.yaml:
+#   * command_topic: the mission coordinator is the single owner of the guard
+#     input and forwards approach commands only in approach states.
+#   * max_linear_speed 0.05 -> 0.10 : headroom for transport_speed.
+#     (The approach controller itself is still limited to 0.05 m/s.)
+#   * max_linear_acceleration 0.10 -> 0.25 : identical to the Follower guard so
+#     the shared transport profile (0.20 m/s^2) passes through both guards
+#     unchanged and the robots never pull against each other.
+#   * allow_reverse is set by the launch file from transport_direction.
+/leader/velocity_guard:
+  ros__parameters:
+    guard_enabled_on_startup: false
+    publish_rate: 50.0
+    command_timeout: 0.30
+
+    max_linear_speed: 0.10
+    max_angular_speed: 0.20
+    max_linear_acceleration: 0.25
+    max_angular_acceleration: 0.40
+    max_slew_dt: 0.10
+    axis_epsilon: 1.0e-9
+    allow_reverse: false
+    shutdown_stop_count: 3
+
+    command_topic: /leader/mission/cmd_vel_raw
+    safe_command_topic: /leader/cmd_vel
