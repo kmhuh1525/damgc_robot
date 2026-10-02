@@ -1,7 +1,10 @@
 """Node-level tests with a fake model and no Ultralytics dependency."""
 
+from collections import deque
+import threading
+import time
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseArray
@@ -55,6 +58,153 @@ class RecordingPublisher:
 
     def publish(self, message):
         self.messages.append(message)
+
+
+def stamped_image(milliseconds):
+    message = Image()
+    message.header.stamp.sec, remainder = divmod(milliseconds, 1000)
+    message.header.stamp.nanosec = remainder * 1_000_000
+    return message
+
+
+def matching_harness(size=5, slop=0.12):
+    return SimpleNamespace(
+        _depth_messages=deque(maxlen=size),
+        _depth_lock=threading.Lock(),
+        _depth_event=threading.Event(),
+        _sync_queue_size=size,
+        _sync_slop_sec=slop,
+        _stamp_to_nanoseconds=detector_module.PersonDetectorNode._stamp_to_nanoseconds,
+        _nearest_depth=lambda rgb: None,
+        get_logger=Mock(),
+    )
+
+
+def add_depth(harness, milliseconds):
+    message = stamped_image(milliseconds)
+    detector_module.PersonDetectorNode._depth_callback(harness, message)
+    return message
+
+
+def match_depth(harness, milliseconds):
+    harness._nearest_depth = lambda rgb: (
+        detector_module.PersonDetectorNode._nearest_depth(harness, rgb)
+    )
+    return detector_module.PersonDetectorNode._get_matching_depth(
+        harness, stamped_image(milliseconds)
+    )
+
+
+def test_depth_sync_exact_and_nearest_stamp():
+    harness = matching_harness()
+    first = add_depth(harness, 1000)
+    second = add_depth(harness, 1066)
+    assert match_depth(harness, 1000) is first
+    assert match_depth(harness, 1050) is second
+
+
+def test_depth_sync_rejects_outside_slop():
+    harness = matching_harness()
+    add_depth(harness, 1000)
+    assert match_depth(harness, 1133) is None
+    harness.get_logger().warning.assert_called_once()
+
+
+def test_depth_sync_prunes_stale_and_limits_buffer():
+    harness = matching_harness(size=3)
+    stale = add_depth(harness, 1000)
+    for stamp in (1500, 1533, 1566, 1600):
+        add_depth(harness, stamp)
+    assert len(harness._depth_messages) == 3
+    assert stale not in harness._depth_messages
+    assert match_depth(harness, 1000) is None
+
+
+def test_depth_sync_late_out_of_order_frame_cannot_evict_newer_depth():
+    harness = matching_harness(size=2)
+    add_depth(harness, 1000)
+    newest = add_depth(harness, 1033)
+    add_depth(harness, 500)
+    add_depth(harness, 1016)
+    assert len(harness._depth_messages) == 2
+    assert match_depth(harness, 1033) is newest
+
+
+def test_depth_sync_waits_for_late_exact_frame():
+    harness = matching_harness()
+    older = add_depth(harness, 867)
+    harness._nearest_depth = lambda rgb: (
+        detector_module.PersonDetectorNode._nearest_depth(harness, rgb)
+    )
+    harness._get_matching_depth = lambda rgb: (
+        detector_module.PersonDetectorNode._get_matching_depth(harness, rgb)
+    )
+    arriving = stamped_image(1000)
+    timer = threading.Timer(
+        0.02,
+        lambda: detector_module.PersonDetectorNode._depth_callback(
+            harness, arriving
+        ),
+    )
+    timer.start()
+    try:
+        chosen = detector_module.PersonDetectorNode._wait_for_matching_depth(
+            harness, stamped_image(1000), timeout_sec=0.1
+        )
+    finally:
+        timer.join()
+    assert chosen is arriving
+    assert chosen is not older
+
+
+def test_depth_sync_wait_timeout_rejects_old_frame():
+    harness = matching_harness()
+    add_depth(harness, 800)
+    harness._nearest_depth = lambda rgb: (
+        detector_module.PersonDetectorNode._nearest_depth(harness, rgb)
+    )
+    harness._get_matching_depth = lambda rgb: (
+        detector_module.PersonDetectorNode._get_matching_depth(harness, rgb)
+    )
+    start = time.monotonic()
+    assert detector_module.PersonDetectorNode._wait_for_matching_depth(
+        harness, stamped_image(1000), timeout_sec=0.01
+    ) is None
+    assert time.monotonic() - start >= 0.01
+
+
+def test_slow_inference_queue_keeps_only_latest_rgb():
+    harness = SimpleNamespace(
+        _pending_image_lock=threading.Lock(),
+        _pending_image=None,
+        _image_event=threading.Event(),
+        _worker_shutdown=threading.Event(),
+        _stamp_to_nanoseconds=detector_module.PersonDetectorNode._stamp_to_nanoseconds,
+    )
+    now_ms = time.time_ns() // 1_000_000
+    first = stamped_image(now_ms - 50)
+    latest = stamped_image(now_ms)
+    detector_module.PersonDetectorNode._enqueue_image_callback(harness, first)
+    detector_module.PersonDetectorNode._enqueue_image_callback(harness, latest)
+    processed = []
+    harness._image_callback = lambda msg: (
+        processed.append(msg), harness._worker_shutdown.set()
+    )
+    detector_module.PersonDetectorNode._worker_loop(harness)
+    assert processed == [latest]
+
+
+def test_stale_rgb_is_discarded_before_inference_queue():
+    harness = SimpleNamespace(
+        _pending_image_lock=threading.Lock(),
+        _pending_image=None,
+        _image_event=threading.Event(),
+        _stamp_to_nanoseconds=detector_module.PersonDetectorNode._stamp_to_nanoseconds,
+    )
+    old = stamped_image(time.time_ns() // 1_000_000 - 500)
+    detector_module.PersonDetectorNode._enqueue_image_callback(harness, old)
+    assert harness._pending_image is None
+    assert not harness._image_event.is_set()
 
 
 def test_model_is_loaded_once_and_source_header_is_preserved():

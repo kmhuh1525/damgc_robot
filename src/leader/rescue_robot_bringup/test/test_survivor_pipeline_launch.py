@@ -123,3 +123,28 @@ def test_raw_visualizer_switch_only_controls_raw_branch():
             value for name, value in active.items()
             if name != "survivor_map_visualizer.launch.py"
         )
+
+
+def test_integrated_mapping_has_one_vslam_tf_owner_and_no_ekf():
+    path = LAUNCH_FILE.with_name("nvblox_vslam_realsense.launch.py")
+    spec = importlib.util.spec_from_file_location("mapping_launch", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    includes = [
+        entity for entity in module.generate_launch_description().entities
+        if isinstance(entity, IncludeLaunchDescription)
+    ]
+    assert len(includes) == 3
+    for entity in includes:
+        entity.launch_description_source.get_launch_description(LaunchContext())
+    assert sorted(
+        Path(entity.launch_description_source.location).name
+        for entity in includes
+    ) == sorted([
+        "visual_slam_realsense.launch.py",
+        "nvblox_realsense.launch.py",
+        "nvblox_nav2.launch.py",
+    ])
+    vslam = next(entity for entity in includes if entity.launch_arguments)
+    assert dict(vslam.launch_arguments)["publish_map_to_odom_tf"] == "true"
+    assert dict(vslam.launch_arguments)["publish_odom_to_base_tf"] == "true"

@@ -67,7 +67,7 @@ CameraInfo ──────────────────┘            
 - Processing: `Time.from_msg(msg.header.stamp)`를 사용한 원본 timestamp TF2 lookup/transform,
   timeout과 unavailable 처리. PoseArray마다 lookup는 한 번만 수행한다.
 - Output: `/leader/survivor/map_positions`, `map` frame의 stamped survivor 후보 좌표.
-- Parameters: `input_topic`, `output_topic`, `target_frame=map`, `tf_timeout_sec=0.2`.
+- Parameters: `input_topic`, `output_topic`, `target_frame=map`, `tf_timeout_sec=0.6`.
 - Failure policy: 빈 frame/stamp, NaN/Inf, lookup/connectivity/extrapolation/timeout 실패 시
   latest TF fallback 없이 메시지 전체를 skip한다.
 - Dependency: Stage 3 PoseArray의 correct frame ID와 original RGB timestamp, 유효 TF tree.
