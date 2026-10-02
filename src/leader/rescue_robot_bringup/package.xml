@@ -18,6 +18,7 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>leader_cooperation</exec_depend>
   <exec_depend>leader_approach_control</exec_depend>
+  <exec_depend>leader_command_selector</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>map_msgs</exec_depend>
   <exec_depend>nav2_costmap_2d</exec_depend>

@@ -185,8 +185,9 @@ controller, BT navigator와 lifecycle manager를 실행합니다. Nav2 global/lo
 - nvblox mesh와 ESDF service 확인
 - `/nav2/cmd_vel` 발행 확인
 
-`/nav2/cmd_vel`은 안전상 wheel bridge의 `/leader/cmd_vel`에 자동 연결하지 않습니다.
-따라서 현재 상태를 완성된 autonomous driving으로 표시하지 않으며, 실장비 이동·반복
+`/nav2/cmd_vel`은 Leader selector의 `NAV2` input으로 연결되어 있다. Mapping 시작 시
+selector는 `TELEOP`이며 실제 Nav2 실차 주행은 수행하지 않았다. 따라서 현재 상태를
+완성된 autonomous driving으로 표시하지 않으며, 실장비 이동·반복
 목표 주행·controller valid trajectory 확보가 남아 있습니다. 상세 절차와 2026-10-02
 검증 결과는 [nvblox/Nav2 검증 문서](src/leader/rescue_robot_bringup/docs/NVBLOX_NAV2_RVIZ.md)를
 참고합니다.
@@ -318,11 +319,13 @@ odometry 검증 절차는 [Leader AprilTag Drive Run Guide](src/leader/rescue_ro
 ros2 launch rescue_robot_bringup camera_apriltag.launch.py \
   enable_depth:=false enable_approach:=true
 ros2 launch leader_approach_control approach_controller.launch.py
+ros2 launch leader_command_selector command_selector.launch.py source_mode:=APPROACH
 ros2 launch leader_approach_control velocity_guard.launch.py
 ```
 
 Component 단독 launch에서는 controller와 guard가 모두 disabled로 시작하므로 enable
-전에는 raw/final command가 zero입니다. 현재 hybrid 정렬은 FAR에서 Tag center를
+전에는 raw/safe command가 zero입니다. Selector는 final `/leader/cmd_vel`을 단독 발행하며,
+실제 주행 시 guard enable과 selector `APPROACH` mode를 모두 확인해야 합니다. 현재 hybrid 정렬은 FAR에서 Tag center를
 추적하고 `0.40 m` 안에서 bounded tag-normal correction을 시작합니다. 통합 leader
 launch의 현재 기본값은 pre-align `0.30 m`, visual final target `0.23 m`, post-align
 grasp target `0.20 m`입니다. `post_align_odom_enabled=true`이면 visual alignment 후

@@ -219,14 +219,14 @@ source_with_nounset_disabled /opt/ros/humble/setup.bash
 printf 'Logs: %s\n' "${LOG_DIR}"
 
 if ! docker image inspect "${MAPPING_IMAGE}" >/dev/null 2>&1; then
-  printf '[0/6] Building the persistent VSLAM mapping image (one time)...\n'
+  printf '[0/7] Building the persistent VSLAM mapping image (one time)...\n'
   docker build \
     --file "${MAPPING_DOCKERFILE}" \
     --tag "${MAPPING_IMAGE}" \
     "${REPO_ROOT}"
 fi
 
-printf '[1/6] Starting STM32 bridge...\n'
+printf '[1/7] Starting STM32 bridge...\n'
 setsid bash -lc "
   export ROS_DOMAIN_ID='${ROS_DOMAIN_ID}'
   export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY}'
@@ -244,7 +244,7 @@ setsid bash -lc "
 " >"${LOG_DIR}/stm32_bridge.log" 2>&1 &
 HOST_PIDS+=("$!")
 
-printf '[2/6] Starting RealSense...\n'
+printf '[2/7] Starting RealSense...\n'
 setsid bash -lc "
   export ROS_DOMAIN_ID='${ROS_DOMAIN_ID}'
   export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY}'
@@ -262,7 +262,20 @@ setsid bash -lc "
 " >"${LOG_DIR}/realsense.log" 2>&1 &
 HOST_PIDS+=("$!")
 
-printf '[3/6] Preparing Isaac ROS container...\n'
+printf '[3/7] Starting Leader command selector in TELEOP mode...\n'
+setsid bash -lc "
+  export ROS_DOMAIN_ID='${ROS_DOMAIN_ID}'
+  export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY}'
+  export RMW_IMPLEMENTATION='${RMW_IMPLEMENTATION}'
+  export FASTDDS_BUILTIN_TRANSPORTS='${FASTDDS_BUILTIN_TRANSPORTS}'
+  source /opt/ros/humble/setup.bash
+  source '${REPO_ROOT}/install/setup.bash'
+  exec ros2 launch leader_command_selector command_selector.launch.py \\
+    source_mode:=TELEOP
+" >"${LOG_DIR}/leader_command_selector.log" 2>&1 &
+HOST_PIDS+=("$!")
+
+printf '[4/7] Preparing Isaac ROS container...\n'
 if ! is_container_running; then
   if [[ -z "${DISPLAY:-}" ]] || ! command -v gnome-terminal >/dev/null 2>&1; then
     printf 'A graphical terminal is required to start the Isaac ROS container.\n' >&2
@@ -378,12 +391,12 @@ docker exec -d -u "${CONTAINER_USER}" \
 
 if [[ "${VSLAM_HEADLESS}" == "1" ]]; then
   if [[ "${VSLAM_ONLY}" == "1" ]]; then
-    printf '[4/6] VSLAM-only headless mode: nvblox and RViz are disabled...\n'
+    printf '[5/7] VSLAM-only headless mode: nvblox and RViz are disabled...\n'
   else
-    printf '[4/6] Headless mode: skipping RViz...\n'
+    printf '[5/7] Headless mode: skipping RViz...\n'
   fi
 else
-  printf '[4/6] Starting RViz...\n'
+  printf '[5/7] Starting RViz...\n'
   docker exec -d -u "${CONTAINER_USER}" \
     -e DISPLAY="${DISPLAY:-:0}" \
     -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
@@ -419,7 +432,7 @@ wait_for_topic "/leader/odom/raw" 30
 wait_for_topic "/leader/camera/infra1/image_rect_raw" 45
 wait_for_topic "/visual_slam/tracking/odometry" 120
 
-printf '[5/6] Starting metrics rosbag...\n'
+printf '[6/7] Starting metrics rosbag...\n'
 docker exec "${CONTAINER_NAME}" rm -f "${CONTAINER_BAG_PID_FILE}" >/dev/null 2>&1 || true
 docker exec -d -u "${CONTAINER_USER}" \
   -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
@@ -465,8 +478,9 @@ printf '  recording: %s\n' "${BAG_DIR}"
 printf '  capturing a 5-second stationary baseline...\n'
 sleep 5
 
-printf '[6/6] Starting arrow-key control. E/D changes speed; Space stops; Ctrl-C shuts everything down.\n'
+printf '[7/7] Starting arrow-key control. E/D changes speed; Space stops; Ctrl-C shuts everything down.\n'
 source_with_nounset_disabled "${REPO_ROOT}/install/setup.bash"
 ros2 run rescue_robot_bringup arrow_key_teleop.py --ros-args \
+  -p command_topic:=/leader/teleop/cmd_vel \
   -p linear_speed:=0.08 \
   -p angular_speed:=0.25

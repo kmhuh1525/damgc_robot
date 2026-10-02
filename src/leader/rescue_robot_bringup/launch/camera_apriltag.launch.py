@@ -11,6 +11,11 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
+    start_camera = LaunchConfiguration("start_camera")
+    start_camera_processing = LaunchConfiguration("start_camera_processing")
+    start_robot_state_publisher = LaunchConfiguration(
+        "start_robot_state_publisher"
+    )
     depth_enabled = LaunchConfiguration("enable_depth")
     sync_enabled = LaunchConfiguration("enable_sync")
     aligned_depth_enabled = LaunchConfiguration("align_depth.enable")
@@ -29,6 +34,33 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "start_camera",
+            default_value="true",
+            choices=["true", "false"],
+            description=(
+                "Start the Leader RealSense driver. Set false to reuse the "
+                "D435 owned by the mapping stack."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "start_camera_processing",
+            default_value="true",
+            choices=["true", "false"],
+            description=(
+                "Start the CameraInfo QoS bridge and RGB rectifier. Set false "
+                "when the Survivor pipeline already owns these nodes."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "start_robot_state_publisher",
+            default_value="true",
+            choices=["true", "false"],
+            description=(
+                "Start the Leader robot_state_publisher. Set false when the "
+                "VSLAM mapping stack already publishes the robot model TF."
+            ),
+        ),
         DeclareLaunchArgument("enable_depth", default_value="true"),
         DeclareLaunchArgument("enable_sync", default_value="true"),
         DeclareLaunchArgument("align_depth.enable", default_value="true"),
@@ -68,18 +100,21 @@ def generate_launch_description():
                 "rgb_camera.color_profile": "640x480x30",
                 "depth_module.depth_profile": "848x480x30",
             }.items(),
+            condition=IfCondition(start_camera),
         ),
         Node(
             package="robot_state_publisher",
             executable="robot_state_publisher",
             name="robot_state_publisher",
             parameters=[{"robot_description": robot_description}],
+            condition=IfCondition(start_robot_state_publisher),
             output="screen",
         ),
         Node(
             package="rescue_robot_apriltag",
             executable="camera_info_qos_bridge.py",
             name="camera_info_qos_bridge",
+            condition=IfCondition(start_camera_processing),
             output="screen",
         ),
         Node(
@@ -92,6 +127,7 @@ def generate_launch_description():
                 ("image_rect", "/leader/camera/color/image_rect"),
             ],
             parameters=[{"qos_overrides./camera_info.subscription.durability": "volatile"}],
+            condition=IfCondition(start_camera_processing),
             output="screen",
         ),
         Node(

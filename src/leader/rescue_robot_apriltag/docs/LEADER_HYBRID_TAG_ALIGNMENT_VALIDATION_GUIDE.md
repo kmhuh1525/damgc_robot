@@ -1,5 +1,11 @@
 # Leader Hybrid AprilTag Alignment Validation Guide
 
+> **Current command path (2026-10-02):** AprilTag raw command → velocity guard →
+> `/leader/approach/cmd_vel_safe` → Leader Command Selector → `/leader/cmd_vel`.
+> The validation steps below preserve historical test context; use the current
+> [Leader AprilTag drive run guide](../../rescue_robot_bringup/docs/LEADER_APRILTAG_DRIVE_RUN_GUIDE.md)
+> for current launch and command-arbitration procedures.
+
 ## 1. Prerequisite
 
 - 로봇 주변과 진행 경로를 비운다.

@@ -1,5 +1,10 @@
 # Leader FINAL_APPROACH Tag-Loss Grace and Gripper Integration
 
+> **Current command path (2026-10-02):** AprilTag raw command → velocity guard →
+> `/leader/approach/cmd_vel_safe` → Leader Command Selector → `/leader/cmd_vel`.
+> Values and validation records below are historical; current launch and arbitration
+> instructions are in the [Leader AprilTag drive run guide](../../rescue_robot_bringup/docs/LEADER_APRILTAG_DRIVE_RUN_GUIDE.md).
+
 > **Current integrated-launch behavior (2026 update)**
 >
 > The active Leader integration is now provided by
