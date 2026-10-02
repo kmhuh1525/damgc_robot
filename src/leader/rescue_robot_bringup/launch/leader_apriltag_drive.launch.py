@@ -30,7 +30,7 @@ def generate_launch_description():
             DeclareLaunchArgument("gripper_baudrate", default_value="115200"),
             DeclareLaunchArgument("rx64_speed", default_value="50"),
             DeclareLaunchArgument("gripper_open_raw", default_value="1000"),
-            DeclareLaunchArgument("gripper_close_raw", default_value="450"),
+            DeclareLaunchArgument("gripper_close_raw", default_value="480"),
             DeclareLaunchArgument("lift_enabled", default_value="true"),
             DeclareLaunchArgument("lift_raw", default_value="300"),
             DeclareLaunchArgument("gripper_lost_rx64_raw", default_value="600"),
@@ -41,7 +41,7 @@ def generate_launch_description():
                 description="Final tag-normal distance from tag plane to base_link",
             ),
             DeclareLaunchArgument("post_align_odom_enabled", default_value="true"),
-            DeclareLaunchArgument("post_align_grasp_target_distance", default_value="0.16"),
+            DeclareLaunchArgument("post_align_grasp_target_distance", default_value="0.20"),
             LogInfo(
                 msg=(
                     "Leader AprilTag drive startup safety: approach controller "
