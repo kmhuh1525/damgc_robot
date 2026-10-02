@@ -102,29 +102,26 @@ process/map-session 외부 영속 저장과 CSV/JSON 저장은 구현하지 않�
 Stage 2의 aligned-depth 거리는 실제 파이프라인에서 확인됐지만, 별도 줄자 기준
 거리표 검증은 완료되지 않았습니다.
 
-현재 공식 실행은 다음 3 terminal입니다. 첫 실행기가 D435, VSLAM, nvblox와
-RViz를 시작하므로 카메라 실행기를 중복 기동하지 않습니다. 새 통합 launch의
-3-terminal 정지 상태 동시 실행과 종료 격리는 확인했습니다. 실제 사람 관측 기반
-Stage 6.1 회귀는 아직 별도 검증이 필요합니다.
+현재 공식 Survivor 실행은 다음 2 terminal입니다. 첫 실행기가 D435, VSLAM,
+nvblox와 RViz를 시작하므로 카메라 실행기를 중복 기동하지 않습니다. 통합 launch가
+YOLO detector와 survivor ROS 노드, `rqt_image_view`를 함께 시작합니다.
 
 ```bash
 # Terminal 1 — VSLAM + nvblox + RViz
 cd ~/damgc_robot
 ./scripts/run_vslam_mapping.sh
 
-# Terminal 2 — survivor ROS pipeline
+# Terminal 2 — integrated survivor pipeline (YOLO + survivor nodes + image view)
 cd ~/damgc_robot
 source /opt/ros/humble/setup.bash
-source install/local_setup.bash
+source install/setup.bash
 ros2 launch rescue_robot_bringup survivor_pipeline.launch.py
-
-# Terminal 3 — YOLO detector
-cd ~/damgc_robot
-./scripts/run_survivor_detector.sh
 ```
 
-Raw 후보 marker를 끄려면 Terminal 2 명령에 `enable_raw_visualizer:=false`를
-붙입니다. 전체 설계, 자동 검증 결과와 실물 검증 체크리스트는
+Raw 후보 marker를 끄려면 `enable_raw_visualizer:=false`를, debug GUI를 끄려면
+`show_image_view:=false`를 붙입니다. 통합 launch가 detector를 이미 실행하므로
+`./scripts/run_survivor_detector.sh`를 동시에 실행하지 마십시오. 이 script는
+수동 fallback/debug 용도로 유지됩니다. 전체 설계, 자동 검증 결과와 실물 검증 체크리스트는
 [통합 launch 검증 문서](docs/SURVIVOR_PIPELINE_INTEGRATED_LAUNCH_VALIDATION.md)에 있습니다.
 
 별도 ROS 환경 터미널에서 확인합니다.
