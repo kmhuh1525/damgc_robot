@@ -98,3 +98,31 @@ def test_camera_launch_applies_typed_final_distance_after_yaml_config():
         parameter_override:
     ]
     assert "value_type=float" in source[parameter_override:]
+
+
+def test_post_align_launch_defaults_and_overrides_reach_approach_node():
+    module = _load()
+    with patch.object(module, "get_package_share_directory", return_value="/tmp/share"):
+        description = module.generate_launch_description()
+    arguments = {
+        entity.name: entity for entity in description.entities
+        if isinstance(entity, DeclareLaunchArgument)
+    }
+    context = LaunchContext()
+    assert perform_substitutions(context, arguments["post_align_odom_enabled"].default_value) == "true"
+    assert perform_substitutions(context, arguments["post_align_grasp_target_distance"].default_value) == "0.16"
+    camera_include = next(
+        entity for entity in description.entities
+        if isinstance(entity, IncludeLaunchDescription)
+        and "enable_approach" in dict(entity.launch_arguments)
+    )
+    forwarded = dict(camera_include.launch_arguments)
+    context.launch_configurations["post_align_odom_enabled"] = "false"
+    context.launch_configurations["post_align_grasp_target_distance"] = "0.18"
+    assert forwarded["post_align_odom_enabled"].perform(context) == "false"
+    assert forwarded["post_align_grasp_target_distance"].perform(context) == "0.18"
+    camera_source = CAMERA_LAUNCH_FILE.read_text(encoding="utf-8")
+    assert 'DeclareLaunchArgument("post_align_odom_enabled", default_value="false")' in camera_source
+    assert 'LaunchConfiguration("post_align_odom_enabled")' in camera_source
+    assert 'LaunchConfiguration("post_align_grasp_target_distance")' in camera_source
+    assert 'value_type=bool' in camera_source

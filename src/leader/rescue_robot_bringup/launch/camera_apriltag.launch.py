@@ -44,6 +44,8 @@ def generate_launch_description():
             default_value="0.23",
             description="Final tag-normal distance from tag plane to base_link",
         ),
+        DeclareLaunchArgument("post_align_odom_enabled", default_value="false"),
+        DeclareLaunchArgument("post_align_grasp_target_distance", default_value="0.16"),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(realsense_launch),
             launch_arguments={
@@ -115,7 +117,15 @@ def generate_launch_description():
                     "final_target_distance": ParameterValue(
                         LaunchConfiguration("final_target_distance"),
                         value_type=float,
-                    )
+                    ),
+                    "post_align_odom_enabled": ParameterValue(
+                        LaunchConfiguration("post_align_odom_enabled"),
+                        value_type=bool,
+                    ),
+                    "post_align_grasp_target_distance": ParameterValue(
+                        LaunchConfiguration("post_align_grasp_target_distance"),
+                        value_type=float,
+                    ),
                 },
             ],
             condition=IfCondition(approach_enabled),

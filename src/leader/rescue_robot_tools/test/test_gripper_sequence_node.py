@@ -92,6 +92,29 @@ def test_detection_opens_once_and_only_aligned_closes() -> None:
     assert harness._deadline == 12.0
 
 
+def test_post_align_public_states_delay_close_until_final_aligned() -> None:
+    harness = make_harness()
+    harness._tag_lost_idle_enabled = False
+    GripperSequenceNode._detection_callback(harness, Bool(data=True))
+    for detected, state in (
+        (True, "STABILIZING"),
+        (True, "FINAL_APPROACH"),
+        (False, "FINAL_APPROACH"),
+        (True, "FINAL_APPROACH"),
+        (True, "STABILIZING"),
+    ):
+        GripperSequenceNode._detection_callback(harness, Bool(data=detected))
+        GripperSequenceNode._alignment_callback(harness, String(data=state))
+        GripperSequenceNode._on_timer(harness)
+        assert harness._state == SequenceState.OPENING
+        assert len(harness.raw_commands) == 1  # OPEN only
+
+    GripperSequenceNode._alignment_callback(harness, String(data="ALIGNED"))
+    GripperSequenceNode._on_timer(harness)
+    GripperSequenceNode._on_timer(harness)
+    assert [command[1] for command in harness.raw_commands] == [1000.0, 450.0]
+
+
 def test_tag_loss_restores_safe_idle_pose_with_torque_enabled() -> None:
     harness = make_harness()
     harness._tag_detected = True

@@ -46,7 +46,8 @@ gripper_enabled=true                 (독립적인 manipulator gate)
   -> gripper sequence
        /leader/supply/detected=true -> RX-28 OPEN 1000
        temporary Tag loss -> gripper position unchanged
-       /leader/base_alignment/state=ALIGNED -> RX-28 CLOSE 450
+       visual alignment satisfied -> post-align wheel-odometry advance
+       -> /leader/base_alignment/state=ALIGNED -> RX-28 CLOSE 450
        -> close_wait(3.0 s) -> RX-64 LIFT 300 -> DONE
 ```
 
@@ -76,6 +77,40 @@ gripper-only bench test가 필요하면 각 child launch를 기존 방식으로 
 | child `startup_pose_enabled` | shared `true`, Leader override `false` | launch 직후 임의 위치 write 차단 |
 | child `startup_torque` | shared `true`, Leader override `false` | launch 직후 torque write 차단 |
 | child `tag_lost_idle_enabled` | shared `true`, Leader override `false` | Tag flicker 시 idle pose 차단 |
+| `post_align_odom_enabled` | `true` | 최종 visual/blind 정렬 후 odometry 추가 직진 |
+| `post_align_grasp_target_distance` | `0.16 m` | Tag와 목표 base_link 전방 간격 |
+
+Post-align은 Tag-loss blind fallback과 별개다. 정상 visual 정렬에서도 반드시 시작한다.
+계획 거리는 visual 완료 순간 `base_link` 전방 Tag 거리에서 grasp target을 뺀 값이다.
+기존 blind fallback이 성공했다면 `final_target_distance - grasp target`을 사용한다.
+이동 중 Tag 인식 결과로 plan을 취소하지 않는다. 계획·odometry·시간 안전 검사에
+실패하면 zero command를 내고 final `ALIGNED` 및 CLOSE를 발행하지 않는다.
+
+```bash
+# 첫 바닥 시험: 자동 lift 차단
+ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py lift_enabled:=false
+# 명시적 설정
+ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py \
+  post_align_odom_enabled:=true post_align_grasp_target_distance:=0.16 lift_enabled:=false
+# 이전 ALIGNED 시점으로 rollback
+ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py \
+  post_align_odom_enabled:=false lift_enabled:=false
+```
+
+```bash
+ros2 param get /leader/apriltag_approach post_align_odom_enabled
+ros2 param get /leader/apriltag_approach post_align_grasp_target_distance
+ros2 topic hz /leader/odom/raw
+ros2 topic echo /leader/alignment/post_align_odom_active
+ros2 topic echo /leader/alignment/post_align_planned_distance
+ros2 topic echo /leader/alignment/post_align_odom_progress
+ros2 topic echo /leader/alignment/post_align_start_tag_x
+ros2 topic echo /leader/odom/raw
+ros2 topic echo /leader/base_alignment/state
+ros2 topic echo /leader/approach/cmd_vel_raw
+ros2 topic echo /leader/cmd_vel
+ros2 topic echo /sequence/status
+```
 
 RX-64 raw `500 → 300` 이동은 Moving Speed raw `50`에서 실제 hardware로 검증되었다.
 속도를 낮춘 목적은 RX-28 파지 후 lift를 더 천천히 움직여 물체 이동을 안정화하는
@@ -244,7 +279,7 @@ ros2 topic echo /leader/alignment/control_mode
 | `FINAL_APPROACH` | final target까지 낮은 속도로 접근한다. |
 | `TOO_CLOSE` | final target을 지나 후진 없이 복구할 수 없어 정지한다. |
 | `STABILIZING` | final position과 yaw의 연속 안정성을 확인한다. |
-| `ALIGNED` | final position과 yaw 정렬 완료 상태이며 정지한다. |
+| `ALIGNED` | post-align enabled일 때 추가 odometry 직진과 정지 확인까지 완료한 최종 상태다. |
 | `TAG_LOST` | 유효한 태그를 찾지 못해 정지한다. |
 
 controller의 startup 설정은 다음과 같이 확인한다.
@@ -337,7 +372,8 @@ ros2 service call /leader/velocity_guard/enable std_srvs/srv/SetBool "{data: fal
 | pre-align target 정면 | `APPROACH` | `linear.x > 0` | `linear.x > 0` | 전진 |
 | final yaw 오차 | `FINE_ALIGN_LEFT/RIGHT` | 해당 방향 angular command | 제한된 angular command | 제자리 미세 회전 |
 | final yaw 정렬 후 | `FINAL_APPROACH` | 낮은 `linear.x > 0` | 제한된 저속 command | 최종 접근 |
-| 숨김 또는 timeout | `TAG_LOST` | zero | zero | 정지 |
+| visual 정렬 또는 blind fallback 완료 후 | `FINAL_APPROACH` + `BLIND_FINAL_APPROACH` | 저속 전진, `angular.z=0` | 제한된 저속 전진 | post-align odometry 접근 |
+| 일반 접근 중 Tag 소실 (blind 조건 미충족) | `TAG_LOST` | zero | zero | 정지 |
 | 너무 가까움/안정화/정렬 완료 | `TOO_CLOSE`, `STABILIZING`, `ALIGNED` | zero | zero | 정지 |
 
 guard가 disabled인 동안에는 state와 raw command에 관계없이 final command와
@@ -380,17 +416,20 @@ ros2 topic echo /leader/system_state
 ## 12. 실제 바닥 검증 절차
 
 1. 로봇 주변과 즉시 정지 수단을 확보한다.
-2. 통합 launch를 실행하고 runtime `rx64_speed=50`을 확인한다.
+2. 통합 launch를 `lift_enabled:=false`로 실행하고 runtime `rx64_speed=50`을 확인한다.
 3. Tag 전 wheel과 RX-28/RX-64가 움직이지 않는지 확인한다. Speed register 설정 자체는
    Goal Position이나 torque command가 아니므로 RX-64 motion을 만들지 않아야 한다.
 4. AprilTag를 보여 RX-28 OPEN 1000을 확인한다.
 5. `/leader/base_alignment/state`와 `/leader/approach/cmd_vel_raw`을 확인하고,
    `/leader/cmd_vel`이 guard를 열기 전까지 zero인지 확인한다.
 6. 주변과 lift 기구의 간섭을 다시 확인한 뒤 velocity guard를 `true`로 변경한다.
-7. ALIGNED에서 RX-28 CLOSE 450, 기존 close wait 3초, RX-64의 저속 raw 300 이동,
-   `LIFTING → DONE`을 순서대로 확인한다.
-8. 태그를 숨겼을 때 `TAG_LOST`, final zero 및 예기치 않은 gripper reposition이 없는지 확인한다.
-9. `lift_enabled:=false`로 다시 실행하여 OPEN/CLOSE 후 RX-64가 움직이지 않는지 확인한다.
+7. Visual 정렬 완료 직후에는
+   RX-28 CLOSE가 없어야 하며 `post_align_odom_active=true`, 계획 거리와 odom 진행량을
+   확인한다. Tag 유지·소실·재검출과 무관하게 약 5~9 cm 저속 전진하는지 확인한다.
+8. 진행량이 계획 거리에 도달하면 raw 및 final cmd_vel zero가 나온 뒤 최종
+   `ALIGNED`와 RX-28 CLOSE 450이 한 번 나오는지 확인한다. Lift를 별도 검증할 때는
+   `lift_enabled:=true`로 실행해 close wait 3초 뒤 RX-64 raw 300과 `LIFTING → DONE`을 확인한다.
+9. 기존 blind fallback 진입 전 far Tag loss에서는 `TAG_LOST`와 zero를 확인한다.
 10. velocity guard를 `false`로 변경하고 motor 정지를 확인한 다음 launch를 종료한다.
 
 실제 motor 주행은 자동 테스트하지 않는다. 이 절차의 결과는 작업자가 별도로

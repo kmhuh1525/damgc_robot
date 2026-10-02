@@ -40,6 +40,8 @@ def generate_launch_description():
                 default_value="0.23",
                 description="Final tag-normal distance from tag plane to base_link",
             ),
+            DeclareLaunchArgument("post_align_odom_enabled", default_value="true"),
+            DeclareLaunchArgument("post_align_grasp_target_distance", default_value="0.16"),
             LogInfo(
                 msg=(
                     "Leader AprilTag drive startup safety: approach controller "
@@ -57,6 +59,12 @@ def generate_launch_description():
                     "enable_approach": "true",
                     "final_target_distance": LaunchConfiguration(
                         "final_target_distance"
+                    ),
+                    "post_align_odom_enabled": LaunchConfiguration(
+                        "post_align_odom_enabled"
+                    ),
+                    "post_align_grasp_target_distance": LaunchConfiguration(
+                        "post_align_grasp_target_distance"
                     ),
                 },
             ),

@@ -378,7 +378,7 @@ Final approach에서 다음을 확인한다.
 ```text
 last_valid_tag_x ≈ 0.26 m
 final_target_distance = 0.23 m
-planned_blind_distance ≈ 0.06 m
+planned_blind_distance ≈ 0.03 m
 ```
 
 Tag를 가까이 이동시켜 image에서 사라지게 하면, 직전 phase가 aligned
@@ -396,8 +396,10 @@ angular.z = 0
 가능해야 한다. 반대로 source stamp가 계속 증가하면 visual FINAL_APPROACH를 유지하고
 blind를 시작하지 않아야 한다.
 
-`odom_forward_progress`가 증가하여 계획 거리 이상이 되면 command는 즉시
-`linear.x=0`, `angular.z=0`이 되고 public state가 `ALIGNED`가 된다.
+`odom_forward_progress`가 계획 거리 이상이 되면 기존 blind fallback은
+`final_target_distance`에 도착한다. `post_align_odom_enabled=false`이면 기존처럼
+zero command와 public `ALIGNED`로 끝난다. `true`이면 public `ALIGNED` 전에 아래의
+mandatory post-align advance가 이어진다.
 
 `/leader/supply/base_relative_pose.header.stamp` 또는 입력 TF의
 `transform.header.stamp`를 함께 확인한다. TF lookup이 계속 성공하더라도 같은 source
@@ -408,9 +410,11 @@ blind mode가 시작되지 않아야 한다.
 
 ### 19.4 Wheels-up and ground test
 
-먼저 바퀴를 들어 올린 상태에서 Tag를 근접 loss시켜 blind mode 진입, forward-only command,
-progress, completion zero를 확인한다. 이후 ground low-speed test에서 약 6 cm만 추가 이동하는지
-확인한다. Blind 중 회전이나 reverse가 나오면 즉시 emergency stop한다.
+먼저 바퀴를 들어 올린 상태에서 Tag를 근접 loss시켜 blind mode 진입,
+forward-only command 및 progress를 확인한다. Post-align disabled면 blind 완료 후
+zero를, enabled면 post-align 완료 후 zero를 확인한다. 이후 ground low-speed test에서
+위 예의 약 3 cm blind 이동과 enabled 시 별도 추가 이동을 확인한다. Blind 중 회전이나
+reverse가 나오면 즉시 emergency stop한다.
 
 ### 19.5 Negative regression tests
 
@@ -434,7 +438,7 @@ progress, completion zero를 확인한다. 이후 ground low-speed test에서 �
 Blind 중 valid Tag를 다시 보이게 하면 `BLIND_FINAL_APPROACH`가 해제되고 현재 pose 기반
 visual alignment로 복귀해야 한다. Invalid pose는 복귀를 유발하지 않는다.
 
-Blind가 odometry 목표를 정상 완료한 뒤에는 `/leader/base_alignment/state`가 한 번만
+Blind가 odometry 목표를 정상 완료하고 post-align이 disabled인 경우에는 `/leader/base_alignment/state`가 한 번만
 `ALIGNED`가 아니라 다음 cycle들에서도 계속 `ALIGNED`여야 한다. completed 상태에서
 Tag가 다시 검출되어도 명시적인 새 approach cycle 없이 재주행하지 않는다. 현재 구현의
 새 cycle 시작 방법은 `apriltag_approach` node/process 재시작이다.
@@ -464,6 +468,67 @@ disable은 blind completion보다 우선해야 한다.
   raw command를 같은 시각에 확인한다.
 - visual path가 이전과 달라지면 blind 관련 변경 외의 hybrid diff를 먼저 조사한다.
 
+## Mandatory Post-Align Odometry Final Advance
+
+이 단계는 Tag-loss blind fallback과 별개다. `post_align_odom_enabled=true`이면
+Tag가 계속 보이는 정상 visual 경로에서도 반드시 실행된다. Visual `ALIGNED` decision은
+내부 시작 신호이며 public `/leader/base_alignment/state=ALIGNED`가 아니다.
+기존 blind fallback이 성공한 경우도 먼저 `final_target_distance`에 도착한 다음
+같은 post-align 단계를 실행한다. 시작 후에는 Tag가 보이거나 사라지거나 다시 보여도
+고정한 wheel odometry plan을 유지한다.
+
+```text
+FINAL_APPROACH → STABILIZING → visual alignment satisfied
+→ POST_ALIGN_ODOM_APPROACH → final ALIGNED → RX-28 CLOSE
+→ close_wait(3.0 s) → RX-64 LIFT
+```
+
+Visual 경로의 계획 거리는 `base_link` 전방 `tag_x -
+post_align_grasp_target_distance`다. 예를 들어 `0.231 - 0.160 = 0.071 m`이고,
+정상 정렬 허용오차 안에서는 대략 5~9 cm를 예상한다. Blind 완료 경로는
+`final_target_distance - post_align_grasp_target_distance`를 사용한다.
+이 경로의 `post_align_start_tag_x`는 재검출한 Tag 좌표가 아니라
+blind가 도달했다고 가정한 `final_target_distance`다.
+고정 7 cm를 강제하지 않는다. 기본 grasp target은 `0.16 m`, 최대 계획 거리는
+`0.12 m`, 최대 시간은 `8.0 s`, odom freshness 한도는 `0.25 s`다.
+
+계획 거리가 음수·비유한 값·최대치 초과이거나 fresh odom이 없으면 전진하지 않는다.
+실행 중 stale/invalid odom, 역진, 한 step의 5 cm 초과 jump, 3 cm 초과 횡편차,
+12° 초과 yaw 편차, watchdog timeout은 zero/no final `ALIGNED`로 중단한다.
+목표 진행량 이후에는 raw와 guarded zero command가 새로 확인된 다음에만 final
+`ALIGNED`를 공개한다. 정지 확인에 실패해도 `ALIGNED`를 공개하지 않는다.
+
+```bash
+ros2 param get /leader/apriltag_approach post_align_odom_enabled
+ros2 param get /leader/apriltag_approach post_align_grasp_target_distance
+ros2 topic echo /leader/alignment/post_align_odom_active
+ros2 topic echo /leader/alignment/post_align_planned_distance
+ros2 topic echo /leader/alignment/post_align_odom_progress
+ros2 topic echo /leader/alignment/post_align_start_tag_x
+ros2 topic echo /leader/odom/raw
+ros2 topic echo /leader/base_alignment/state
+ros2 topic echo /leader/approach/cmd_vel_raw
+ros2 topic echo /leader/cmd_vel
+ros2 topic echo /sequence/status
+```
+
+Leader 통합 launch의 기본값은 enabled=true다. 단독 camera launch 및 YAML 기본값은
+false다. 통합 launch에서 명시적으로 지정하거나 rollback하려면 다음을 사용한다.
+
+```bash
+ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py \
+  post_align_odom_enabled:=true post_align_grasp_target_distance:=0.16 \
+  lift_enabled:=false
+ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py \
+  post_align_odom_enabled:=false lift_enabled:=false
+```
+
+먼저 guard OFF에서 진단을 관찰하고, 바퀴를 들어 올려 Tag 유지·소실·재검출 시
+`post_align_odom_active=true`, `FINAL_APPROACH/BLIND_FINAL_APPROACH`, 전진 전용 명령,
+계획거리 도달 후 zero와 final `ALIGNED` 순서를 확인한다. 첫 바닥 저속 시험에는
+`lift_enabled:=false`를 사용한다. RX-28 CLOSE가 post-align 완료 전에는 없고
+final `ALIGNED` 이후 한 번만 발생하는지 확인한다.
+
 ## 24. Visual-Only Final Alignment Validation
 
 기본 final target은 `0.23 m`이며, 통합 launch의 `final_target_distance` argument로
@@ -480,7 +545,8 @@ Build 후 integrated launch를 실행한다. Launch만으로 motor가 구동되�
 cd ~/damgc_robot
 source /opt/ros/humble/setup.bash
 source install/local_setup.bash
-ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py
+ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py \
+  post_align_odom_enabled:=false
 ```
 
 기본값을 유지하는 전달 경로는 다음과 같다.
@@ -510,8 +576,9 @@ ros2 param get /leader/apriltag_approach aligned_confirm_samples
 ros2 param get /leader/apriltag_approach stabilizing_tag_loss_grace_sec
 ```
 
-Expected output은 `false`, `0.020 m`, `5.0 deg`, `0.30 s`, `0.23 m`, `3`,
-`0.20 s`다. 실제 ROS 2 배포판의 출력 표현이 다르더라도 값 자체를 확인한다.
+Visual-only 절은 `post_align_odom_enabled=false`로 실행한다. Blind enable 값은
+사용 중인 YAML을 확인한다. 나머지 기대값은 `0.020 m`, `5.0 deg`, `0.30 s`,
+`0.23 m`, `3`, `0.20 s`다.
 
 `/leader/approach_controller`는 final target pose를 소비할 뿐 별도의
 `final_target_distance`, `stop_distance`, `target_distance` parameter를 갖지 않는다.
@@ -527,6 +594,7 @@ ros2 param dump /leader/approach_controller
 ```bash
 ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py \
   lift_enabled:=false \
+  post_align_odom_enabled:=false \
   final_target_distance:=0.19
 ```
 
@@ -569,17 +637,19 @@ FAR / COARSE → NEAR ALIGN → FINE ALIGN → FINAL_APPROACH
 → STABILIZING → ALIGNED
 ```
 
-`ALIGNED` 판정은 final planar position error가 `0.020 m` 이내이고 final yaw
+내부 visual `ALIGNED` 판정은 final planar position error가 `0.020 m` 이내이고 final yaw
 error가 `±5°` 이내인 두 조건을 동시에 만족한 뒤 `0.30 s` 유지하고 새 source
 timestamp의 valid observation 3개를 확인할 때 최초로 기대한다. 이후 latch되어 short
-loss와 jitter에도 `ALIGNED`/zero를 유지한다. Perception timer는 20 Hz이고 source TF는
+loss와 jitter에도 내부 latch를 유지한다. Post-align enabled이면 공개 `ALIGNED`는
+odometry 단계 완료 및 정지 확인 뒤에만 나온다. Perception timer는 20 Hz이고 source TF는
 약 30 Hz이므로 동일 timestamp 중복 count가 없어야 한다.
 
 ### 24.4 Loss, failure, and follow-up criteria
 
-`blind_final_approach_enabled`가 `false`이므로 close-range에서 Tag가 사라지면
-odometry fallback으로 계속 전진하지 않고 기존 `TAG_LOST` 및 stop behavior가
-나와야 한다. 이 설정은 safety logic을 우회하지 않는다.
+Tag-loss 결과는 `blind_final_approach_enabled`의 실제 YAML 값에 따른다.
+false면 `TAG_LOST`와 stop이고, true면 close-range eligibility를 만족할 때만
+기존 blind fallback을 실행한다. 이 절의 `post_align_odom_enabled=false`는
+blind fallback 설정을 변경하지 않는다.
 
 `ALIGNED`가 나오지 않으면 다음을 기록한다.
 
