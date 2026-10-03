@@ -1,100 +1,161 @@
-# 협동운반 경로 변환 알고리즘 초안
+# 협동운반 경로 생성·변환·추종 미리보기
 
-## 진행 상황 (2026-10-03)
+## 구현 범위
 
-- 완료: 강체 그립 관계를 이용한 리더 pose → 팔로워 pose 변환 및 회전항을 포함한
-  속도/차동구동 가능성 계산 로직을 추가했다.
-- 완료: `/plan` 기반 팔로워 경로 미리보기 ROS 노드, 실행 launch, 기본 비활성 설정을
-  추가했다. 미리보기 노드는 구동 명령을 보내지 않는다.
-- 미완료: 로봇·상자 실측값 입력, ROS 빌드 및 런타임 연결 확인, RViz 시각화 확인.
-- 다음: 실측값 보정 → 미리보기 검토 → 상자/로봇 footprint 충돌검사 → 별도 구동 연동과
-  안전 검토 순으로 진행한다. 지금 단계에서는 실차 운반 경로를 실행하지 않는다.
+협동운반 경로를 세 단계로 계산한다.
 
-## 목적
+1. 상자 시작·목표 pose에서 장애물과 작업 경계를 고려한 상자 중심 경로를 만든다.
+2. Leader의 axle 경로 또는 상자 경로에서 Leader/Follower axle 경로를 계산한다.
+3. Follower 경로와 odometry에서 pure-pursuit 속도 미리보기를 계산한다.
 
-리더의 계획 경로를 물체의 경로로 해석하고, 양쪽 그립 관계를 이용해 팔로워의 목표
-경로와 속도를 계산한다. 팔로워가 단순히 리더 `linear.x` 부호만 반전하면 회전운동에
-따른 두 로봇 위치 차이를 반영할 수 없으므로, 고정된 강체 그립 가정을 기준으로 한다.
+경로와 속도 미리보기는 실제 구동 명령에 연결하지 않는다. follower mission selector의
+`/follower/mission/cmd_vel`, velocity guard, wheel bridge와 분리돼 있다.
 
-## 기하 모델
+## 사용자가 제공한 치수와 모델 가정
 
-각 변환 `T_AB`는 B 좌표를 A 좌표로 옮긴다. 로봇 CAD와 상자 크기에서 다음 변환을
-측정·계산한다.
+- 운반 상자: 가로 10.5 cm, 세로 16 cm, 높이 20 cm. 파지점 높이는 바닥에서 7 cm이며,
+  운반 시 바닥에서 2 cm 들어 올린다. 높이는 현재 2D 경로 계산에는 사용하지 않는다.
+- 두 로봇은 같은 형상이고 상자 양쪽에서 중앙을 파지한다. 각 `base_link`에서 상자 중심까지
+  31 cm, 상자 두께는 10.5 cm다. 따라서 각 base에서 면 중앙 접촉점까지는 25.75 cm다.
+- `base_link`는 바퀴축 중점으로 가정한다. URDF의 좌우 바퀴 간격은 23 cm다.
+- 각 로봇과 그리퍼 사이에는 모터 없는 yaw 베어링 힌지가 있다. 각 힌지는 중립에서 좌우 15°,
+  즉 `[-15°, +15°]` 회전할 수 있다고 모델링한다.
+- 힌지 중심은 바퀴축 중점에서 12.5 cm 떨어져 있다. 힌지가 로봇 전방 중심선에 놓이고 링크가
+  중립 자세에서 파지면과 정렬된다고 가정한다. base-to-contact 25.75 cm에서 12.5 cm를 뺀
+  13.25 cm를 hinge-to-contact 거리로 두며, 상자 중심에서 접촉면까지는 5.25 cm다.
+- URDF의 그리퍼 tip 원점 30.5 cm는 사용자가 확인한 실제 파지 TCP 25.75 cm와 다른 기준이다.
 
-| 변환 | 의미 |
-|---|---|
-| `T_L_GL` | 리더 base에서 리더 그리퍼 접촉 프레임 |
-| `T_O_GL` | 상자 중심 프레임에서 리더 그리퍼 접촉 프레임 |
-| `T_O_GF` | 상자 중심 프레임에서 팔로워 그리퍼 접촉 프레임 |
-| `T_F_GF` | 팔로워 base에서 팔로워 그리퍼 접촉 프레임 |
+이 기하 모델은 `cooperative_mission/hinged_formation.py`에 있다. 실물 힌지 중심·링크 방향,
+베어링 마찰과 관성은 아직 대조하지 않았다.
 
-리더의 계획 pose가 `T_WL`이면:
+## 힌지 제약과 두 로봇 경로
+
+`HingeGeometry`의 주요 길이는 다음과 같다.
+
+| 항목 | 값 |
+|---|---:|
+| axle에서 hinge 중심 | 0.125 m |
+| hinge에서 접촉점 | 0.1325 m |
+| 상자 중심에서 접촉점 | 0.0525 m |
+| 물리 힌지 범위 | ±15° |
+| 계획 여유 적용 후 허용 범위 | ±12° |
+
+상자 경로의 곡률 `k`로 준정적 힌지 각을 계산한다. `d = hinge_to_contact + object_center_to_contact`,
+`a = axle_to_hinge`일 때 사용 식은 다음과 같다.
 
 ```text
-T_WO = T_WL · T_L_GL · inverse(T_O_GL)
-T_WF = T_WO · T_O_GF · inverse(T_F_GF)
+q(k) = atan(k d) + asin(k a / sqrt(1 + (k d)^2))
 ```
 
-따라서 경로의 모든 리더 pose를 같은 식으로 변환하면 팔로워 기준 경로가 된다.
-두 그리퍼가 상자에 대해 미끄러지지 않는다는 전제에서 경로는 리더와 팔로워의
-고정된 상대 pose를 유지한다.
+기본 계획은 측정된 hinge 범위의 80%만 사용한다. 현재 길이에서 이에 해당하는 곡률 한계는
+약 `0.6795 m⁻¹`, 최소 반경은 약 `1.47 m`다. 반대편 로봇에는 대칭 부호의 hinge 각을 적용한다.
+양쪽 axle pose를 생성한 뒤 곡률·힌지 각·차동구동의 횡방향 변위 비율을 확인한다.
 
-`GraspGeometry`와 `leader_pose_to_follower` / `transform_leader_path`가 이 2D 변환을
-구현한다. 기하 엔진은
-[`formation.py`](../src/cooperative_mission/cooperative_mission/formation.py)에 있다.
+힌지 각은 저속 준정적 평형 모델이다. 이 값만으로 수동 베어링이 실제 운반 중 같은 각을
+따른다고 보장할 수 없다.
 
-## ROS 경로 미리보기
+## 상자 pose에서 경로 생성
 
-`cooperative_path_preview_node`는 `/plan`을 구독해 위 기하 변환을 적용하고
-`/cooperation/follower_path_preview` (`nav_msgs/Path`)로 내보낸다. 입력 계획과 출력은
-`leader_odom_frame`(기본 `odom`)이어야 한다. `/visual_slam/tracking/odometry`와
-`/nav2/cmd_vel`은 현재 회전 기준 속도 가능성 진단에만 쓰며, 변환 경로 자체는 `/plan`에서
-계산한다. 결과 상태는 `/cooperation/path_preview/status`, 현재 속도 미리보기는
-`/cooperation/follower_twist_preview`에서 확인한다.
+`cooperative_object_path_planner_node`는 `geometry_msgs/PoseStamped` 시작·목표 pose를 입력받는다.
+시작·목표 yaw를 접선으로 갖는 cubic Bezier 후보와 endpoint pose에 맞는 원호 후보를 만들고,
+각 후보를 양 로봇 axle 경로로 변환해 기구학 제약을 확인한다. 통과한 후보 중 곡률 에너지와
+길이 비용이 낮은 경로를 고른다.
+
+작업 경계와 장애물은 설정으로 전달한다.
+
+- `obstacle_circles`: `[x, y, radius, ...]` 형식의 정적 원형 장애물 목록
+- `workspace_bounds`: `[xmin, xmax, ymin, ymax]` 형식의 사각 작업영역
+- 로봇은 axle 중심 반경 0.32 m의 원, 상자는 중심 반경 0.10 m의 원으로 검사한다.
+- 장애물·경계에는 0.05 m 여유를 더한다.
+
+이 원형 외곽 검사는 실제 차체 회전 외곽을 간단히 근사한다. 현재 후보 검색기는 일반적인
+전역 최적화/격자 경로 계획기가 아니며, 임의의 장애물 배치에 경로가 있다고 보장하지 않는다.
+센서 map, Nav2 costmap, 동적 장애물과 충돌 지도를 연결하지 않았다.
+
+## Leader `/plan`에서 경로 변환
+
+실제 Nav2의 `/plan`을 입력으로 쓰려면 다음 launch를 실행한다.
 
 ```bash
-ros2 launch cooperative_mission cooperative_path_preview.launch.py
+ros2 launch cooperative_mission cooperative_path_preview_from_leader.launch.py
 ```
 
-기본 설정은 `geometry_ready: false`이고 모든 치수가 0이므로 의도적으로 경로를 출력하지
-않는다. 실제 기구를 측정해 `config/cooperative_path_preview.yaml`의 상자 크기와 네 pose를
-채운 뒤에만 `geometry_ready: true`로 바꾼다. 이 노드는 시각화·진단 전용이며 구동 명령을
-발행하지 않는다. 또한 아직 변환 경로의 충돌 검사, 팔로워 Nav2 goal 추종, 경로 재계획 연동은
-구현되지 않았다.
+`cooperative_leader_path_adapter_node`는 `/plan`을 Leader axle 경로로 읽는다. 경로 방향과 pose의
+곡률로 힌지 각을 초기화하고, 상자 중심 경로 곡률을 반복 추정한다. 상자 경로에서 Leader axle
+경로를 다시 생성해 원 입력과 위치 2 cm, yaw 2° 이내로 맞는지 확인한다. curvature, hinge,
+횡방향 변위 또는 round-trip 검사가 실패하면 해당 경로를 거부한다.
 
-## 속도 변환과 주행 가능성
+`/plan`의 pose orientation은 경로 진행 방향을 따라야 한다. Leader axle 경로를 상자 중심 경로로
+그대로 취급하거나 `/plan`을 object path 토픽에 직접 연결하지 않는다.
 
-리더의 body twist를 `(v_L, 0, omega)`라 하고 리더 base에서 팔로워 base까지의
-상대 벡터를 리더 좌표로 `(dx, dy)`라 하면 팔로워 위치의 세계 좌표 속도는
-리더 원점 속도에 회전 항 `omega × (dx, dy)`를 더해 얻는다. 이를 팔로워 base 좌표로
-회전해 `(v_Fx, v_Fy, omega_F)`를 구한다.
+## Follower 경로 방향과 속도 미리보기
 
-차동구동 팔로워는 옆 방향 속도 `v_Fy`를 만들 수 없다. 따라서 `abs(v_Fy)`가 허용치보다
-크면 해당 리더 회전 명령은 현재 고정 그립 구조에서 실행 불가로 판단해야 한다. 이때
-명령을 임의로 잘라 보내면 상자에 비틀림이 걸릴 수 있으므로 정지 후 더 완만한 경로를
-요청한다. `leader_twist_to_follower`는 종방향 명령과 함께 필요한 횡방향 속도를 돌려주며,
-호출자가 주행 가능성을 판정하도록 한다.
+`cooperative_path_preview_node`는 상자 중심 경로에서 두 axle 경로를 만든다. 각 경로 segment의
+이동 벡터를 로봇 heading에 투영해 `FORWARD` 또는 `REVERSE`를 판정한다. 서로 마주 보는 두 로봇이
+같은 방향으로 상자를 옮기는 이 시연에서는 Leader가 전진할 때 Follower가 후진한다.
 
-## 경로 입력과 계획기 제약
+`cooperative_path_tracking_preview_node`는 Follower 경로와 `/follower/odom/raw`를 입력받는다.
+경로와 odometry frame이 다르면 TF를 조회해 pose를 path frame으로 바꾼 뒤 pure pursuit를 계산한다.
+진행 방향에 따라 `linear.x` 부호를 적용하며, 경로 곡률이 커지면 설정된 횡가속도 한계로 속도를
+낮춘다. odometry timeout, 경로 오차 초과, 잘못된/mixed path 방향이면 0 속도 미리보기를 낸다.
 
-- 리더의 미래 경로 입력은 `nav_msgs/Path`의 pose sequence다. `/nav2/cmd_vel`은 현재 시점의
-  controller 명령일 뿐, 미래 경로의 대체물이 아니다.
-- 팔로워에서 쓸 경로는 `T_WF`를 follower가 사용할 좌표계로 변환해야 한다. 양 로봇의
-  `map`/`odom`이 같은 좌표계라는 보장이 없으면, 파지 완료 시점의 상대 pose를 기준으로
-  초기 정렬을 만들고 상대 경로를 전달한다.
-- Nav2가 리더 footprint만 고려해 만든 경로를 그대로 실행하면 상자나 팔로워가 장애물에
-  닿을 수 있다. 다음 단계에서는 상자와 두 차체의 footprint 합집합을 costmap에 반영하거나,
-  변환 경로를 footprint 전체로 검사하고 충돌 시 리더 경로 재계획을 요청해야 한다.
-- 물체가 양쪽 그리퍼에서 회전할 수 있거나 접촉점이 미끄러지면 강체 모델은 맞지 않는다.
-  실제 그리퍼 관절 유격과 물체 고정 방식을 확인한 후 rigid-grasp 가정을 유지할지 정한다.
+명령은 다음 전용 토픽으로만 발행한다.
 
-## 현재 저장소에서 확인된 연결 상태
+```text
+/cooperation/follower/path_tracking/cmd_vel_preview  geometry_msgs/Twist
+/cooperation/follower/path_tracking/status           std_msgs/String
+```
 
-Nav2는 `/plan` 경로 생성이 확인됐지만 `/nav2/cmd_vel`은 wheel bridge와 분리돼 있고,
-실차 주행은 아직 검증되지 않았다. 기존 미션 수행 경로는 `/plan`을 추종하지 않고,
-리더가 생성한 제한 속도 명령으로 기본 직진 동작을 수행한다. 새 경로 미리보기 노드는 기존
-미션을 바꾸지 않는 독립 진단 단계다.
+이 토픽은 실제 `/follower/mission/cmd_vel`이나 wheel bridge 입력과 연결되지 않았다. 반대 방향
+linear 속도가 계산된다는 확인과 실제 후진 주행 검증은 별개다.
 
-실제 운반 경로를 켜기 전 필요한 측정값은 상자 길이·폭·높이, 양쪽 접촉점의 상자 중심
-기준 pose, 각 로봇 base 기준 그리퍼 pose, 두 차체 footprint, 그리고 좌표계 간 시작 시
-정렬이다. 높이는 2D 경로 기하에는 들어가지 않지만 수직 간섭·리프트 여유 검사에 필요하다.
+## ROS 토픽
+
+| 노드 | 입력 | 출력 |
+|---|---|---|
+| `cooperative_object_path_planner_node` | `/cooperation/object_start`, `/cooperation/object_goal` | `/cooperation/object_path`, `/cooperation/object_path_planner/status` |
+| `cooperative_leader_path_adapter_node` | `/plan` | `/cooperation/object_path`, `/cooperation/leader_path_adapter/status` |
+| `cooperative_path_preview_node` | `/cooperation/object_path` | `/cooperation/leader_path_preview`, `/cooperation/follower_path_preview`, `/cooperation/path_preview/status` |
+| `cooperative_path_tracking_preview_node` | `/cooperation/follower_path_preview`, `/follower/odom/raw`, TF | `/cooperation/follower/path_tracking/cmd_vel_preview`, `/cooperation/follower/path_tracking/status` |
+
+planner demo는 설정된 workspace·장애물 MarkerArray를 `/visualization_marker_array`로 발행한다.
+RViz에서 Leader axle은 주황색, Follower axle은 청록색, 작업 경계는 회색, 장애물은 빨간색이다.
+
+## 실행
+
+### 시작·목표 pose와 3×4 m 시연 환경
+
+```bash
+ros2 launch cooperative_mission cooperative_path_preview_demo.launch.py
+rviz2 -d "$(ros2 pkg prefix cooperative_mission)/share/cooperative_mission/rviz/cooperative_path_preview.rviz"
+```
+
+demo 입력은 상자 시작 `(-0.8, -1.5, 0 rad)`, 목표 `(0.7, 0, π/2)`이며, 작업영역은
+`x=[-1.5, 1.5]`, `y=[-2, 2]`다. 정적 장애물 중심은 `(-0.8, 0)`, 반경 0.18 m다.
+이 90° 원호 시연은 길이 약 2.36 m, 반경 약 1.5 m, 최대 곡률 약 `0.667 m⁻¹`, 최대 hinge
+각 약 11.8°로 계산된다.
+
+### 실제 Leader `/plan`과 Follower odometry 미리보기
+
+```bash
+ros2 launch cooperative_mission cooperative_path_preview_from_leader.launch.py
+```
+
+Nav2 `/plan`이 들어오면 두 axle 경로와 주행 방향을 변환한다. 유효한 Follower odometry가 들어오면
+pure-pursuit 속도 미리보기 토픽도 갱신한다. 실제 구동은 하지 않는다.
+
+## 확인 결과 및 미완료 작업
+
+- `colcon build --packages-select cooperative_mission`을 ROS Humble에서 완료했다.
+- synthetic 90° Leader path를 `/plan`으로 넣어 adapter에서 상자 경로 역산, round-trip 확인, 두 axle
+  경로 발행까지 연결을 확인했다. 결과는 `leader_drive=FORWARD`, `follower_drive=REVERSE`였다.
+- 같은 합성 경로의 시작점에 Follower odometry를 넣었을 때 pure-pursuit preview가
+  `linear.x=-0.05 m/s`, `angular.z≈0.033 rad/s`를 계산했다. 이 속도는 preview 전용 토픽에서만
+  확인했다.
+- 테스트 suite는 이번 작업에서 실행하지 않았다. 실제 Nav2 경로·TF·Follower odometry 조합은
+  로봇 환경에서 대조해야 한다.
+- 아직 하지 않은 검증: hinge/link 실측 대조, 베어링 마찰과 동역학, 실제 지도/costmap 장애물 계획,
+  Leader/Follower 제어기와의 통합, wheel bridge 연결, 저속 실차 추종과 비상 정지 확인.
+
+현재 기존 협동 미션은 Leader 제한 속도에 맞춘 직진 동작을 수행한다. 이 문서의 경로 생성·변환·
+추종 노드는 독립 진단/미리보기 단계이며 기존 미션 동작을 대체하지 않는다.

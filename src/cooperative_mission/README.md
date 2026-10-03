@@ -90,7 +90,7 @@ YAML보다 우선한다.
 | `transport_direction` | `forward` | 리더 base_link 기준 운반 방향 (`backward`면 launch가 리더 guard `allow_reverse`를 켬) |
 | `transport_speed` | 0.05 m/s | 순항 속도 (≤ 0.10) |
 | `transport_duration` | 1.0 s | 램프 포함 전체 이동 시간 |
-| `lift_raw` / `lower_raw` | 300 / 600 | RX-64 들어올림 / 내려놓기 위치 |
+| `lift_raw` / `lower_raw` | Leader 300 / 600, Follower 20 / 270 | RX-64 들어올림 / 내려놓기 위치; Follower raw 20=최고, 270=최저 |
 | `lift_duration` | 3.5 s | RX-64 이동 대기 (속도 50에서 600→300 약 2.6 s) |
 | `reposition_segments` (팔로워) | `[""]` | 반대편까지 돌아가는 odometry 기동, 예 `["turn:90","drive:0.6","turn:-90"]` |
 
@@ -111,3 +111,22 @@ cd src/cooperative_mission && python3 -m pytest -q test
 재전송 멱등성, release/reset 흐름을 검증한다.
 
 실행 절차는 [협동 미션 실행 가이드](../../docs/COOPERATIVE_MISSION_RUN_GUIDE.md)를 따른다.
+협동운반 경로 생성 알고리즘은
+[협동운반 경로 변환 알고리즘](../../docs/COOPERATIVE_TRANSPORT_PATH_ALGORITHM.md)을 참고한다.
+ROS 진단 노드는 `ros2 launch cooperative_mission cooperative_path_preview.launch.py`로
+실행할 수 있다. 이 노드는 `/cooperation/object_path`의 상자 중심 경로를 받아, passive yaw
+힌지 각도 제한과 차동구동 기구학을 적용한 두 로봇의 axle 경로를 생성한다. 현재 경로 출력은
+미리보기용이며 실차 구동에는 연결되지 않는다.
+경로 확인용 RViz 설정은 `rviz/cooperative_path_preview.rviz`이며, 실행 노드와 별도로
+`rviz2 -d "$(ros2 pkg prefix cooperative_mission)/share/cooperative_mission/rviz/cooperative_path_preview.rviz"`
+로 연다.
+실제 Nav2 없이 3×4 m 시연 경로를 생성하려면
+`ros2 launch cooperative_mission cooperative_path_preview_demo.launch.py`를 사용한다. 이 launch는
+합성 상자 시작·목표 pose를 발행하고, 회전 안쪽 원형 장애물과 작업 경계를 고려해 힌지·차동구동 조건을
+통과한 상자 경로를 `/cooperation/object_path`로 발행한다. RViz에 작업 경계와 장애물도 표시한다.
+장애물은 설정 파일의 정적 원형 모델이며 Nav2 `/plan`이나 실제 costmap은 사용하지 않는다.
+리더 Nav2 `/plan`에서 팔로워 경로를 미리 보려면
+`ros2 launch cooperative_mission cooperative_path_preview_from_leader.launch.py`를 사용한다.
+이 노드는 리더 axle 경로에서 상자 중심 경로를 역산한 뒤, 양쪽 로봇 경로와 전진·후진 방향을
+계산한다. Follower odometry가 들어오면 pure-pursuit 추종 속도도 계산하지만
+`/cooperation/follower/path_tracking/cmd_vel_preview`에만 발행하며 실차 명령과는 분리돼 있다.

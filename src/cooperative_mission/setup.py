@@ -14,6 +14,7 @@ setup(
         ("share/" + package_name, ["package.xml", "README.md"]),
         ("share/" + package_name + "/config", glob("config/*.yaml")),
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
+        ("share/" + package_name + "/rviz", glob("rviz/*.rviz")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -29,6 +30,10 @@ setup(
         "console_scripts": [
             "leader_mission_node = cooperative_mission.leader_mission_node:main",
             "follower_mission_node = cooperative_mission.follower_mission_node:main",
+            "cooperative_demo_plan_node = cooperative_mission.demo_plan_node:main",
+            "cooperative_object_path_planner_node = cooperative_mission.object_path_planner_node:main",
+            "cooperative_leader_path_adapter_node = cooperative_mission.leader_path_adapter_node:main",
+            "cooperative_path_tracking_preview_node = cooperative_mission.path_tracking_preview_node:main",
             "cooperative_path_preview_node = cooperative_mission.path_preview_node:main",
         ],
     },
