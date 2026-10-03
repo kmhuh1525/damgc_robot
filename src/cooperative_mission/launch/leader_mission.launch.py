@@ -1,8 +1,9 @@
 """Leader Orin: complete cooperative grasp-lift-transport mission stack.
 
 Starts the existing Leader AprilTag perception and approach controller, the
-Leader velocity guard (input owned by the mission coordinator), the STM32
-bridge, the Dynamixel gripper node and the mission coordinator itself.
+Leader velocity guard (input owned by the mission coordinator), the Leader
+command selector, the STM32 bridge, the Dynamixel gripper node and the mission
+coordinator itself.
 Nothing moves until ``/mission/start`` is called.
 
 Do NOT run leader_cooperation / leader_apriltag_drive / gripper_sequence at
@@ -55,6 +56,13 @@ def generate_launch_description() -> LaunchDescription:
         ),
         DeclareLaunchArgument("transport_speed", default_value="0.05"),
         DeclareLaunchArgument("transport_duration", default_value="1.0"),
+        DeclareLaunchArgument(
+            "start_command_selector", default_value="true", choices=["true", "false"],
+            description=(
+                "Start the Leader selector in MISSION mode; set false only when "
+                "a shared selector is already running in MISSION mode"
+            ),
+        ),
         DeclareLaunchArgument(
             "final_target_distance", default_value="0.23",
             description="Final tag-normal distance from tag plane to Leader base_link",
@@ -136,6 +144,12 @@ def generate_launch_description() -> LaunchDescription:
                 {"controller_enabled_on_startup": "false"},
             ),
             velocity_guard,
+            _include(
+                "leader_command_selector",
+                "command_selector.launch.py",
+                {"source_mode": "MISSION"},
+                condition=IfCondition(config("start_command_selector")),
+            ),
             GroupAction(
                 condition=IfCondition(config("use_stm32_bridge")),
                 actions=[

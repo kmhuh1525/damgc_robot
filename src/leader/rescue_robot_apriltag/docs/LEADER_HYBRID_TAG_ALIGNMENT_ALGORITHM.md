@@ -327,9 +327,10 @@ abs(final_yaw_error) <= 5 deg
 timestamp는 timer가 반복 처리해도 중복 count하지 않는다. Tag 중심만 보는 side-looking
 pose는 position 또는 yaw error가 남으므로 ALIGNED가 될 수 없다.
 
-`ALIGNED`는 내부 latch다. 확정 후 valid frame jitter나 짧은 Tag loss에도 public state와
-command는 `ALIGNED` 및 zero를 유지한다. `reset()`, selected Tag ID 변경, node 재시작만
-이 latch를 해제한다.
+`ALIGNED`는 정렬 상태머신의 내부 latch다. `post_align_odom_enabled=false`이면
+기존처럼 바로 public `ALIGNED`/zero가 된다. Enabled이면 이 decision을
+post-align 시작 신호로만 쓰며 odometry 진행과 정지 확인 후에 public `ALIGNED`를 낸다.
+`reset()`, selected Tag ID 변경, node 재시작은 내부 latch를 해제한다.
 
 `STABILIZING`에서 직전 valid pose가 두 tolerance를 만족한 경우에만 최대 `0.20 s`의
 Tag-loss grace를 허용한다. grace 동안 state는 `STABILIZING`, command는 zero이고
@@ -599,7 +600,8 @@ forward_progress = cos(start_yaw) * dx + sin(start_yaw) * dy
 
 이 방식은 odom/world X축과 로봇의 시작 전진 방향이 달라도 실제 전진량을 측정한다.
 Blind 중에는 저속 positive `linear.x`만 사용하고 `angular.z`는 0이다. 진행량이 계획량에
-도달하면 zero command를 publish하고 `ALIGNED`로 전환한 뒤 completion latch를 설정한다.
+도달하면 post-align disabled에서는 기존대로 zero 및 `ALIGNED`가 된다. Enabled에서는
+별도 post-align odometry 이동을 시작하고 그 완료·정지 확인 후 public `ALIGNED`가 된다.
 Latch가 유지되는 동안 Tag loss나 cached TF는 `TAG_LOST`로 되돌리거나 같은 blind plan을
 다시 만들지 못한다.
 
@@ -619,10 +621,10 @@ reverse command를 만들지 않는다.
 
 ### 31.5 ALIGNED 의미
 
-일반 visual `ALIGNED`는 AprilTag pose로 최종 위치와 yaw를 확인한 상태다.
+일반 visual `ALIGNED`는 AprilTag pose로 최종 위치와 yaw를 확인한 내부 상태다.
 Blind-final `ALIGNED`는 마지막 valid fine-aligned visual pose와 짧은 odometry translation으로
 추정한 상태다. Public state는 기존 호환성을 위해 `ALIGNED`로 유지하지만
-`alignment/control_mode`와 blind diagnostic으로 경로를 구분할 수 있다.
+post-align 실행 여부는 별도 `post_align_*` diagnostic으로 구분한다.
 
 ### 31.6 Parameters and diagnostics
 
@@ -649,5 +651,6 @@ gate에 재사용한다. 다음 diagnostic으로 blind 상태를 확인한다.
 
 설계 이유는 전체 hybrid controller를 다시 바꾸는 것이 아니라, 카메라가 마지막 몇 cm를
 관측하지 못하는 한정된 상황에서만 vision에서 기존 odometry로 sensor handoff하기 위해서다.
-이 fallback은 vision-confirmed final pose를 대체하지 않으며, visual 또는 blind 어느 경로든
-후속 gripper sequence의 연결점은 기존 `ALIGNED`다.
+이 fallback은 vision-confirmed final pose를 대체하지 않는다. Post-align enabled이면
+visual 또는 blind 어느 경로든 mandatory odometry advance를 거친 뒤에만
+후속 gripper sequence의 연결점인 public `ALIGNED`를 발행한다.

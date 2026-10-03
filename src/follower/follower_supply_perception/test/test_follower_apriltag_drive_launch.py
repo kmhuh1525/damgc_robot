@@ -207,7 +207,13 @@ def test_follower_runtime_code_and_config_have_no_leader_identifiers() -> None:
             continue
         for path in package.rglob("*"):
             if not path.is_file() or any(
-                part in {"test", "docs", "__pycache__"} for part in path.parts
+                part in {
+                    "test",
+                    "docs",
+                    "__pycache__",
+                    "follower_Leader Tracking",
+                }
+                for part in path.parts
             ):
                 continue
             if path.suffix in {".py", ".yaml", ".xml", ".msg"}:

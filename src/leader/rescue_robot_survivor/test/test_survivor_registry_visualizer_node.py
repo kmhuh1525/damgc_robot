@@ -309,7 +309,7 @@ def test_rviz_config_preserves_raw_and_adds_registry_display():
 
     assert parsed["Visualization Manager"]["Global Options"][
         "Fixed Frame"
-    ] == "map"
+    ] == "odom"
     assert "Name: NvbloxMesh" in source
     assert "Name: Survivor Raw" in source
     assert "Value: /leader/survivor/map_markers" in source

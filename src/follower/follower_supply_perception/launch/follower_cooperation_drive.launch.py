@@ -73,6 +73,7 @@ def generate_launch_description() -> LaunchDescription:
                 "selected_velocity_guard.launch.py",
                 {
                     "guard_enabled_on_startup": guard_enabled_on_startup,
+                    "allow_reverse": "true",
                 },
             ),
             GroupAction(

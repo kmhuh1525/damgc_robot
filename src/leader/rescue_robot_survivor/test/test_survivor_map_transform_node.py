@@ -49,7 +49,7 @@ def make_harness(transform=None):
     buffer.lookup_transform.return_value = transform or make_transform()
     harness = SimpleNamespace(
         _target_frame="map",
-        _tf_timeout_sec=0.2,
+        _tf_timeout_sec=0.6,
         _tf_buffer=buffer,
         _publisher=publisher,
         _warn=Mock(),
@@ -68,7 +68,7 @@ def test_multi_person_uses_one_exact_stamp_lookup_and_preserves_header():
     assert args[0] == "map"
     assert args[1] == message.header.frame_id
     assert args[2].nanoseconds == 123_000_000_456
-    assert kwargs["timeout"].nanoseconds == 200_000_000
+    assert kwargs["timeout"].nanoseconds == 600_000_000
     harness._publisher.publish.assert_called_once()
     result = harness._publisher.publish.call_args.args[0]
     assert result.header.frame_id == "map"

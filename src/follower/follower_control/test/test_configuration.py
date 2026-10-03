@@ -34,5 +34,7 @@ def test_integrated_launch_overrides_only_the_input_topic() -> None:
         PACKAGE_ROOT / "launch/selected_velocity_guard.launch.py"
     ).read_text(encoding="utf-8")
     assert '"command_topic": "/follower/selected_cmd_vel"' in launch
+    assert '"allow_reverse"' in launch
+    assert 'default_value="false"' in launch
     assert "velocity_guard.yaml" in launch
     assert "/follower/safe_cmd_vel" not in launch

@@ -138,7 +138,10 @@ def generate_launch_description() -> LaunchDescription:
             _include(
                 "follower_control",
                 "selected_velocity_guard.launch.py",
-                {"guard_enabled_on_startup": "false"},
+                {
+                    "guard_enabled_on_startup": "false",
+                    "allow_reverse": "true",
+                },
             ),
             stm32_bridge,
             _include(

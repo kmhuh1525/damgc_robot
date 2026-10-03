@@ -1,0 +1,10 @@
+/leader/command_selector:
+  ros__parameters:
+    source_mode: STOP
+    publish_rate: 50.0
+    teleop_timeout: 0.30
+    approach_timeout: 0.35
+    nav2_timeout: 0.50
+    mission_timeout: 0.35
+    axis_epsilon: 1.0e-9
+    shutdown_stop_count: 3

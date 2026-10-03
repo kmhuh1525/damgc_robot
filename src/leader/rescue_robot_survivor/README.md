@@ -169,7 +169,7 @@ argument의 기본값으로 읽히므로 config 수정과 실행 시 override를
 | `map_transform.input_topic` | `/leader/survivor/camera_positions` | Stage 4 input |
 | `map_transform.output_topic` | `/leader/survivor/map_positions` | Stage 4 output |
 | `map_transform.target_frame` | `map` | map target frame |
-| `map_transform.tf_timeout_sec` | `0.2` | exact-time lookup timeout; fallback 없음 |
+| `map_transform.tf_timeout_sec` | `0.6` | exact-time lookup timeout; fallback 없음 |
 | `map_visualizer.marker_lifetime_sec` | `2.0` | finite lifetime; 무입력 시 RViz에서 만료 |
 | `map_visualizer.text_z_offset` | `0.30` | text 표시 Z에만 적용, map XYZ 불변 |
 | `show_camera_xyz` | `true` | debug image XYZ 둘째 줄 표시 |

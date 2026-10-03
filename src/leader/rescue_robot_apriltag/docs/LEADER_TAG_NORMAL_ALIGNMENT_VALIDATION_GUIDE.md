@@ -151,7 +151,10 @@ Case 1                     Case 2
  ROBOT                         ROBOT
 ```
 
-- Case 1: final position과 yaw가 맞으면 `STABILIZING→ALIGNED`가 가능해야 한다.
+- Case 1: final position과 yaw가 맞으면 내부 `STABILIZING→ALIGNED` 판정이 가능해야 한다.
+  현재 Leader 통합 launch의 post-align enabled 설정에서는 공개 `ALIGNED`가 추가
+  odometry 직진과 정지 확인 후에 나온다. 아래 기존 visual-only 절차는
+  `post_align_odom_enabled:=false`로 실행한다.
 - Case 2: 카메라 중앙에서 태그를 바라보더라도 target position 또는 yaw error 때문에
   절대 ALIGNED가 되어서는 안 된다.
 - Tag를 숨기면 즉시 `TAG_LOST`, raw/final command zero가 되어야 한다.

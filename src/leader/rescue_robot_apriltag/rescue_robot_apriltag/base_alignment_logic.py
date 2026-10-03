@@ -240,6 +240,33 @@ def compute_forward_progress(
     return progress if isfinite(progress) else None
 
 
+def validate_forward_odom_progress(
+    start: tuple, previous: Optional[tuple], current: tuple
+) -> Optional[float]:
+    """Apply the existing blind-motion displacement checks to one odom sample."""
+    progress = compute_forward_progress(
+        start[0], start[1], start[2], current[0], current[1]
+    )
+    if progress is None or progress < -0.01:
+        return None
+    if previous is not None:
+        step = hypot(current[0] - previous[0], current[1] - previous[1])
+        total_dx = current[0] - start[0]
+        total_dy = current[1] - start[1]
+        lateral_deviation = abs(
+            -sin(start[2]) * total_dx + cos(start[2]) * total_dy
+        )
+        yaw_deviation = abs(normalize_angle(current[2] - start[2]))
+        if (
+            not isfinite(step)
+            or step > 0.05
+            or lateral_deviation > 0.03
+            or yaw_deviation > radians(12.0)
+        ):
+            return None
+    return progress
+
+
 def normalize_angle(angle: float) -> float:
     """Wrap a finite angle to ``[-pi, pi]``."""
     if not isfinite(angle):

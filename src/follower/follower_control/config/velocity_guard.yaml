@@ -12,7 +12,7 @@
     max_angular_acceleration: 0.8
     max_slew_dt: 0.10
     axis_epsilon: 1.0e-9
-    allow_reverse: true
+    allow_reverse: false
     shutdown_stop_count: 3
 
     # Standalone/backwards-compatible cooperation input.

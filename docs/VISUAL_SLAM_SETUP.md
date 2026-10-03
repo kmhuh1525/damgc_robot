@@ -258,17 +258,18 @@ python3 scripts/analyze_vslam_bag.py data/vslam_mapping_날짜_시간 \
 강제로 터미널을 닫거나 전원을 끄면 rosbag의 `metadata.yaml`이 완성되지 않을 수 있다.
 시험이 끝나면 조종 터미널에서 Ctrl-C로 종료한다.
 
-### 방향키 노드만 실행
+### 방향키 teleop과 selector
 
-호스트에서 STM32 bridge를 실행한 다음, 별도 터미널에서 방향키 teleop을 실행한다.
-방향키를 누르고 있는 동안에만 `/leader/cmd_vel`을 발행하며, 키 반복 입력이 0.25초
-끊기면 자동으로 0속도를 발행한다. `E`는 속도 증가, `D`는 속도 감소, Space는 즉시
-정지이고 Ctrl-C는 종료이다.
+방향키 teleop은 `/leader/teleop/cmd_vel` input을 발행하며 최종 `/leader/cmd_vel`을
+직접 발행하지 않는다. 별도 teleop 시험에서는 selector를 의도적으로 `TELEOP`으로 시작한
+다음 teleop을 실행한다. 공식 Mapping script는 두 노드를 함께 시작한다.
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /home/maze/damgc_robot/install/setup.bash
-ros2 run rescue_robot_bringup arrow_key_teleop.py
+ros2 launch leader_command_selector command_selector.launch.py source_mode:=TELEOP
+ros2 run rescue_robot_bringup arrow_key_teleop.py --ros-args \
+  -p command_topic:=/leader/teleop/cmd_vel
 ```
 
 기본 속도는 직진 0.12 m/s, 회전 0.35 rad/s이다. `E`/`D`를 한 번 누를 때마다 각각
@@ -278,6 +279,7 @@ ros2 run rescue_robot_bringup arrow_key_teleop.py
 
 ```bash
 ros2 run rescue_robot_bringup arrow_key_teleop.py --ros-args \
+  -p command_topic:=/leader/teleop/cmd_vel \
   -p linear_speed:=0.08 \
   -p angular_speed:=0.25
 ```

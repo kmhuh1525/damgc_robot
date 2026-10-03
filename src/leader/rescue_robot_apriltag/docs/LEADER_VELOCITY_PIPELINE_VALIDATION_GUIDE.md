@@ -6,6 +6,11 @@
 > 따른다. 아래의 `base_target_forward`/controller `target_forward` 설명은 현행
 > 파라미터가 아니라 변경 전 구조를 기록한 것이다.
 
+> **현재 통합 경로 (2026-10-02):** raw approach → velocity guard →
+> `/leader/approach/cmd_vel_safe` → Leader Command Selector → `/leader/cmd_vel`이다.
+> 이 문서의 과거 final-guard 경로/검증 결과는 당시 기록으로 보존한다. 현행 실행 절차는
+> [Leader AprilTag drive run guide](../../rescue_robot_bringup/docs/LEADER_APRILTAG_DRIVE_RUN_GUIDE.md)를 따른다.
+
 ## 1. 목적과 범위
 
 이 문서는 Jetson에서 `damgc_robot` repository를 clone 또는 pull한 개발자가

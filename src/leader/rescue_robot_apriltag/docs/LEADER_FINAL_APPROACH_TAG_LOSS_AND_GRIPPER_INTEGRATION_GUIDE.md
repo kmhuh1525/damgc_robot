@@ -1,13 +1,19 @@
 # Leader FINAL_APPROACH Tag-Loss Grace and Gripper Integration
 
+> **Current command path (2026-10-02):** AprilTag raw command → velocity guard →
+> `/leader/approach/cmd_vel_safe` → Leader Command Selector → `/leader/cmd_vel`.
+> Values and validation records below are historical; current launch and arbitration
+> instructions are in the [Leader AprilTag drive run guide](../../rescue_robot_bringup/docs/LEADER_APRILTAG_DRIVE_RUN_GUIDE.md).
+
 > **Current integrated-launch behavior (2026 update)**
 >
 > The active Leader integration is now provided by
 > `rescue_robot_bringup/launch/leader_apriltag_drive.launch.py`. Its defaults are
 > `gripper_enabled=true`, RX-28 `open_raw=1000`, RX-28 `close_raw=450`, and
 > `lift_enabled=true`, `lift_raw=300`, and RX-64 Moving Speed raw `50`. The active sequence is
-> `/leader/supply/detected=true` -> RX-28 OPEN 1000 -> existing approach and
-> `/leader/base_alignment/state=ALIGNED` -> RX-28 CLOSE 450 -> existing
+> `/leader/supply/detected=true` -> RX-28 OPEN 1000 -> existing approach ->
+> visual alignment satisfied -> mandatory post-align odometry advance ->
+> final `/leader/base_alignment/state=ALIGNED` -> RX-28 CLOSE 450 -> existing
 > `close_wait=3.0 s` -> RX-64 Goal Position 300 -> DONE. The old
 > `rx64_middle` automatic step described in historical sections below is no longer
 > part of the integrated sequence; the semantic command remains available for
@@ -16,7 +22,10 @@
 >
 > `gripper_enabled=false` is the top-level master gate and excludes both the
 > Dynamixel node and sequence launch. It does not change the existing wheel safety:
-> `velocity_guard` remains startup-disabled.
+> `velocity_guard` remains startup-disabled. The integrated launch enables
+> `post_align_odom_enabled=true` by default; `post_align_odom_enabled:=false`
+> restores the former ALIGNED timing. The historical grace-only tests below
+> apply with post-align disabled.
 
 ## Follower 적용값
 
@@ -237,7 +246,9 @@ dropout_age = current_node_time - last_fresh_final_observation_receipt_time
 FINAL_APPROACH grace는 이 값 이후 시작되지 않으며 두 시간이 더해지지 않는다. Duplicate
 TF도 마지막 fresh receipt부터 0.20초가 지나면 TAG_LOST가 된다.
 
-현재 `blind_final_approach_enabled=false`이며 이번 기능은 다음을 사용하지 않는다.
+이 절의 과거 grace-only 시험에서는 `blind_final_approach_enabled=false`를
+사용했다. 현재 작업 YAML의 blind 설정은 true이며 post-align은 별도 기능이다.
+당시 grace-only 구현은 다음을 사용하지 않았다.
 
 - odometry
 - `BLIND_FINAL_APPROACH`
@@ -255,11 +266,12 @@ TF도 마지막 fresh receipt부터 0.20초가 지나면 TAG_LOST가 된다.
 | `aligned_confirm_samples` | 3 | samples | 안정 시간 이후 필요한 fresh confirmation | 변경 없음 |
 | `stabilizing_tag_loss_grace_sec` | 0.20 | s | 기존 STABILIZING dropout grace | 변경 없음 |
 | `final_approach_tag_loss_grace_sec` | 0.20 | s | 마지막 fresh FINAL_APPROACH observation 이후 stop-and-wait 시간 | 추가 |
-| `blind_final_approach_enabled` | false | bool | blind odometry 접근 허용 여부 | false 유지 |
+| `blind_final_approach_enabled` | false (당시 시험값) | bool | blind odometry 접근 허용 여부 | 현재 YAML 값과 구분 |
 | `blind_last_tag_max_age` | 0.25 | s | 기존 blind용 마지막 visual/odom freshness | 변경 없음 |
 
-모든 값은 `rescue_robot_apriltag/config/approach.yaml`과 node startup parameter에서
-동일하다. FINAL_APPROACH grace는 startup-only이며 음수 또는 비유한 값은 거부된다.
+이 표는 당시 시험 기록이다. 현재 값은 `rescue_robot_apriltag/config/approach.yaml`과
+node startup parameter에서 확인한다. FINAL_APPROACH grace는 startup-only이며
+음수 또는 비유한 값은 거부된다.
 
 ## 5. 기존 정렬 상태머신 보존
 

@@ -21,6 +21,12 @@ def generate_launch_description() -> LaunchDescription:
                 choices=["true", "false"],
                 description="Enable final guarded velocity output on startup",
             ),
+            DeclareLaunchArgument(
+                "allow_reverse",
+                default_value="false",
+                choices=["true", "false"],
+                description="Allow negative linear velocity for cooperative motion",
+            ),
             Node(
                 package="follower_control",
                 executable="velocity_guard_node",
@@ -32,6 +38,10 @@ def generate_launch_description() -> LaunchDescription:
                         "command_topic": "/follower/selected_cmd_vel",
                         "guard_enabled_on_startup": ParameterValue(
                             LaunchConfiguration("guard_enabled_on_startup"),
+                            value_type=bool,
+                        ),
+                        "allow_reverse": ParameterValue(
+                            LaunchConfiguration("allow_reverse"),
                             value_type=bool,
                         ),
                     },

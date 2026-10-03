@@ -50,7 +50,7 @@ velocity topic까지 구현됐지만 STM32/UART/motor에는 연결되지 않았�
 
 | 목표 이름 | 용도 | 현재 상태 |
 | --- | --- | --- |
-| `/leader/cmd_vel` | Leader guard의 최종 software 속도 | 구현, hardware 미연결 |
+| `/leader/cmd_vel` | Leader command selector의 최종 software 속도 | 구현, STM32 연결 |
 | `/follower/cmd_vel` | 기존 cooperation/upstream 명령 입력 | 구현, selector 입력이며 hardware 미연결 |
 | `/leader/odom`, `/follower/odom` | 로봇별 wheel odometry | 미구현 |
 | `/leader/imu`, `/follower/imu` | 로봇별 BNO055 IMU | 미구현 |
@@ -185,9 +185,11 @@ ALIGNED latch도 reset한다.
 
 리더 `mission_coordinator`가 전체 시나리오(태그 탐색·정렬·파지 → 팔로워 반대편 파지 → 동시
 리프트 → 1초 협동 직진)를 진행하고, 팔로워 `mission_executor`가 ACK 기반 명령을 수행한다.
-미션 launch에서는 리더 guard 입력이 `/leader/mission/cmd_vel_raw`, 팔로워 selector의
-COOPERATION 입력이 `/follower/mission/cmd_vel`로 바뀐다. `/cooperation/target_velocity`는
-리더 좌표 공통 속도이며, 마주 보는 팔로워는 `linear.x` 부호를 반전해 추종한다.
+미션 launch에서는 리더 guard 입력이 `/leader/mission/cmd_vel_raw`, safe 출력이 리더
+selector의 `MISSION` 입력 `/leader/mission/cmd_vel_safe`로 연결된다. 팔로워 selector의
+COOPERATION 입력은 `/follower/mission/cmd_vel`로 바뀐다. 최종 `/leader/cmd_vel`은 최신
+리더 command selector만 발행한다. `/cooperation/target_velocity`는 리더 좌표 공통 속도이며,
+마주 보는 팔로워는 `linear.x` 부호를 반전해 추종한다.
 자세한 내용은 [cooperative_mission README](../src/cooperative_mission/README.md)를 참고한다.
 
 ## 향후 연결 지점

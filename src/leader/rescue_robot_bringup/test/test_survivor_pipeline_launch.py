@@ -7,6 +7,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext, LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    ExecuteProcess,
     GroupAction,
     IncludeLaunchDescription,
 )
@@ -48,7 +49,33 @@ def _description():
 def test_installed_children_and_node_ownership():
     description = _description()
     assert isinstance(description, LaunchDescription)
-    assert not any(isinstance(entity, Node) for entity in description.entities)
+    detector_processes = [
+        entity for entity in description.entities
+        if type(entity) is ExecuteProcess
+    ]
+    assert len(detector_processes) == 1
+    detector_command = [
+        substitution.perform(LaunchContext())
+        for argument in detector_processes[0].cmd
+        for substitution in argument
+    ]
+    assert detector_command[:4] == ["docker", "run", "--rm", "-i"]
+    assert "--runtime=nvidia" in detector_command
+    assert "--network" in detector_command
+    assert "--ipc" in detector_command
+    assert detector_command[-1].endswith(
+        "ros2 launch rescue_robot_survivor person_detector.launch.py"
+    )
+    gui_nodes = [
+        entity for entity in description.entities
+        if isinstance(entity, Node)
+    ]
+    assert len(gui_nodes) == 1
+    assert gui_nodes[0].node_package == "rqt_image_view"
+    assert gui_nodes[0].node_executable == "rqt_image_view"
+    assert gui_nodes[0]._Node__arguments == [
+        "/leader/survivor/debug_image"
+    ]
 
     groups = [
         entity for entity in description.entities
@@ -92,13 +119,17 @@ def test_raw_visualizer_switch_only_controls_raw_branch():
         entity for entity in description.entities
         if isinstance(entity, DeclareLaunchArgument)
     ]
-    assert len(declarations) == 1
-    assert declarations[0].name == "enable_raw_visualizer"
-    default = "".join(
-        part.perform(LaunchContext())
-        for part in declarations[0].default_value
-    )
-    assert default == "true"
+    defaults = {
+        declaration.name: "".join(
+            part.perform(LaunchContext())
+            for part in declaration.default_value
+        )
+        for declaration in declarations
+    }
+    assert defaults == {
+        "enable_raw_visualizer": "true",
+        "show_image_view": "true",
+    }
 
     for enabled in ("true", "false"):
         context = LaunchContext()
@@ -123,3 +154,41 @@ def test_raw_visualizer_switch_only_controls_raw_branch():
             value for name, value in active.items()
             if name != "survivor_map_visualizer.launch.py"
         )
+
+
+def test_image_view_switch_only_controls_gui():
+    description = _description()
+    gui = next(
+        entity for entity in description.entities
+        if isinstance(entity, Node)
+        and entity.node_package == "rqt_image_view"
+    )
+    for enabled in ("true", "false"):
+        context = LaunchContext()
+        context.launch_configurations["show_image_view"] = enabled
+        assert gui.condition.evaluate(context) is (enabled == "true")
+
+
+def test_integrated_mapping_has_one_vslam_tf_owner_and_no_ekf():
+    path = LAUNCH_FILE.with_name("nvblox_vslam_realsense.launch.py")
+    spec = importlib.util.spec_from_file_location("mapping_launch", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    includes = [
+        entity for entity in module.generate_launch_description().entities
+        if isinstance(entity, IncludeLaunchDescription)
+    ]
+    assert len(includes) == 3
+    for entity in includes:
+        entity.launch_description_source.get_launch_description(LaunchContext())
+    assert sorted(
+        Path(entity.launch_description_source.location).name
+        for entity in includes
+    ) == sorted([
+        "visual_slam_realsense.launch.py",
+        "nvblox_realsense.launch.py",
+        "nvblox_nav2.launch.py",
+    ])
+    vslam = next(entity for entity in includes if entity.launch_arguments)
+    assert dict(vslam.launch_arguments)["publish_map_to_odom_tf"] == "true"
+    assert dict(vslam.launch_arguments)["publish_odom_to_base_tf"] == "true"

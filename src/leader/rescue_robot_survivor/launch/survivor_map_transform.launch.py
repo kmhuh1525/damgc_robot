@@ -20,7 +20,7 @@ def generate_launch_description():
                 default_value="/leader/survivor/map_positions",
             ),
             DeclareLaunchArgument("target_frame", default_value="map"),
-            DeclareLaunchArgument("tf_timeout_sec", default_value="0.2"),
+            DeclareLaunchArgument("tf_timeout_sec", default_value="0.6"),
             Node(
                 package="rescue_robot_survivor",
                 executable="survivor_map_transform_node",

@@ -2,8 +2,9 @@
 
 Leader의 hybrid center/tag-normal control target, internal mode와 alignment state를 사용해
 `/leader/approach/cmd_vel_raw`을 계산하는 differential-drive controller다. 같은
-패키지의 독립 `velocity_guard`가 최종 `/leader/cmd_vel`의 clamp, reverse 차단,
-slew limit와 watchdog을 담당한다.
+패키지의 독립 `velocity_guard`가 `/leader/approach/cmd_vel_safe`의 clamp, reverse
+차단, slew limit와 watchdog을 담당한다. Leader command selector는 이 입력과
+TELEOP/NAV2 중 선택된 한 source만 `/leader/cmd_vel`에 발행한다.
 
 ## Interface
 
@@ -14,7 +15,7 @@ slew limit와 watchdog을 담당한다.
 - Safety gates: `/leader/supply/detected`, `/leader/supply/tag_id`
 - Raw output: `/leader/approach/cmd_vel_raw` (`geometry_msgs/msg/Twist`)
 - Controller enable: `/leader/approach/enable` (`std_srvs/srv/SetBool`)
-- Guard output: `/leader/cmd_vel`
+- Guard output: `/leader/approach/cmd_vel_safe`
 - Guard enable: `/leader/velocity_guard/enable` (`std_srvs/srv/SetBool`)
 
 Controller는 target pose 뒤에 도착한 mode와 state를 하나의 generation으로 결합한다.

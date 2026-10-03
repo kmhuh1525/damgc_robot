@@ -28,7 +28,8 @@ apriltag_approach ─┐                                    apriltag_approach �
 approach_controller┤ /leader/approach/cmd_vel_raw        approach_controller┼→ /follower/approach/cmd_vel_raw ─┐
                    ▼                                                        │                                 │
         mission_coordinator ──/leader/mission/cmd_vel_raw→ velocity_guard   │ mission_executor                │
-          │  │  │                                  → /leader/cmd_vel → STM32 │  └→ /follower/mission/cmd_vel ─┐│
+          │  │  │                    → mission/cmd_vel_safe → selector      │  └→ /follower/mission/cmd_vel ─┐│
+          │  │  │                                      → /leader/cmd_vel → STM32                             ││
           │  │  └─ /leader/dynamixel/command → Dynamixel                   │                                ▼▼
           │  │                                                             │        command_selector (STOP/APPROACH/COOPERATION)
           │  └─ /mission/follower_command ─────── DDS ──────────────────────►│                  ▼
@@ -38,6 +39,8 @@ approach_controller┤ /leader/approach/cmd_vel_raw        approach_controller�
 
 * 리더 `mission_coordinator`가 리더 velocity guard 입력의 **단일 소유자**다. approach
   controller 출력은 `LEADER_APPROACH` 상태에서만(후진 성분 제외) 전달한다.
+  guard의 safe 출력은 리더 selector의 `MISSION` 입력을 거치며, selector만 최종
+  `/leader/cmd_vel`을 발행한다.
 * 팔로워 `mission_executor`는 selector의 `COOPERATION` 입력(`/follower/mission/cmd_vel`로
   remap)을 소유하고, selector `source_mode`·approach enable·guard enable을 서비스로 전환한다.
 * 모든 리더→팔로워 명령은 `(session, seq)`가 붙은 JSON(`std_msgs/String`)이며 ACK가 올 때까지
@@ -57,12 +60,13 @@ approach_controller┤ /leader/approach/cmd_vel_raw        approach_controller�
 
 ## 안전 정책
 
-* `/mission/start` 전에는 두 로봇 모두 approach/guard가 꺼져 있고 selector는 `STOP`이다.
+* `/mission/start` 전에는 두 로봇 모두 approach/guard가 꺼져 있다. 리더 selector는
+  `MISSION`에서 zero를 유지하고 팔로워 selector는 `STOP`이다.
 * 시작 조건: 리더 서비스·그리퍼 노드 준비, `/cooperation/target_velocity`·
   `/leader/mission/cmd_vel_raw`의 다른 publisher 없음, 팔로워 상태 신선·`IDLE`·ready.
 * 서비스 응답 실패/무응답(2 s), 그리퍼 `ERROR`, 태그 재탐색 초과, 각 단계 timeout,
   팔로워 상태 끊김(운반 중 0.35 s, 그 외 1 s), 리더 heartbeat 끊김(팔로워가 움직이는 중 1 s)
-  → `FAULT`: 속도 0, approach/guard off, selector `STOP`. **그리퍼는 계속 잡고 있다.**
+  → `FAULT`: 속도 0, approach/guard off, 팔로워 selector `STOP`. **그리퍼는 계속 잡고 있다.**
 * 기존 안전 경계(velocity guard 제한·watchdog, selector freshness, STM32 200 ms watchdog)는
   그대로 유지된다.
 

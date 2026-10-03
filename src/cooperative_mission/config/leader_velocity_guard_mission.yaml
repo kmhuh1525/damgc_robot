@@ -24,4 +24,5 @@
     shutdown_stop_count: 3
 
     command_topic: /leader/mission/cmd_vel_raw
-    safe_command_topic: /leader/cmd_vel
+    # The Leader command selector remains the sole /leader/cmd_vel publisher.
+    safe_command_topic: /leader/mission/cmd_vel_safe

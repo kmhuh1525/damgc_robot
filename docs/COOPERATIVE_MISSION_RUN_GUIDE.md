@@ -113,7 +113,8 @@ Leader : IDLE → LEADER_SEARCH ⇄ LEADER_APPROACH → LEADER_GRASP → FOLLOWE
          (DONE/FAULT) --/mission/release--> RELEASE → IDLE
 Follower: IDLE → [REPOSITION] → SEARCH ⇄ APPROACH → GRASP → GRASPED → LIFT_READY
          → LIFTING → LIFTED → TRANSPORT_READY → HOLD --RELEASE--> RELEASING → IDLE
-어느 단계든 오류/timeout/abort → FAULT (속도 0, guard off, selector STOP, 그리퍼 유지)
+어느 단계든 오류/timeout/abort → FAULT
+(속도 0, 양쪽 guard off, 팔로워 selector STOP, 그리퍼 유지)
 ```
 
 ## 6. 현장 보정 항목
