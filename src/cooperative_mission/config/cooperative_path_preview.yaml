@@ -1,0 +1,20 @@
+cooperative_path_preview:
+  ros__parameters:
+    # Set true only after measuring and entering every transform below.
+    geometry_ready: false
+    leader_odom_frame: odom
+    box_length: 0.0
+    box_width: 0.0
+    leader_base_to_gripper: {x: 0.0, y: 0.0, yaw: 0.0}
+    object_to_leader_gripper: {x: 0.0, y: 0.0, yaw: 0.0}
+    object_to_follower_gripper: {x: 0.0, y: 0.0, yaw: 0.0}
+    follower_base_to_gripper: {x: 0.0, y: 0.0, yaw: 0.0}
+    lateral_velocity_tolerance: 0.01
+    pose_timeout: 0.3
+    twist_timeout: 0.5
+    leader_path_topic: /plan
+    leader_odom_topic: /visual_slam/tracking/odometry
+    leader_twist_topic: /nav2/cmd_vel
+    follower_path_topic: /cooperation/follower_path_preview
+    follower_twist_topic: /cooperation/follower_twist_preview
+    status_topic: /cooperation/path_preview/status

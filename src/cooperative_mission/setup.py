@@ -29,6 +29,7 @@ setup(
         "console_scripts": [
             "leader_mission_node = cooperative_mission.leader_mission_node:main",
             "follower_mission_node = cooperative_mission.follower_mission_node:main",
+            "cooperative_path_preview_node = cooperative_mission.path_preview_node:main",
         ],
     },
 )
