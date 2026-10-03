@@ -15,4 +15,4 @@
     shutdown_stop_count: 3
 
     command_topic: /leader/approach/cmd_vel_raw
-    safe_command_topic: /leader/cmd_vel
+    safe_command_topic: /leader/approach/cmd_vel_safe

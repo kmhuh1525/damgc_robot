@@ -1,4 +1,4 @@
-"""Final software-level Leader velocity guard with watchdog and slew limits."""
+"""Leader AprilTag velocity guard with watchdog and slew limits."""
 
 import time
 from math import isfinite
@@ -29,7 +29,7 @@ COMMAND_QOS = QoSProfile(
 
 
 class VelocityGuardNode(Node):
-    """Publish only validated and rate-limited commands on final cmd_vel."""
+    """Publish validated and rate-limited commands for APPROACH selection."""
 
     def __init__(self) -> None:
         super().__init__("velocity_guard")
@@ -79,7 +79,9 @@ class VelocityGuardNode(Node):
         self.declare_parameter(
             "command_topic", "/leader/approach/cmd_vel_raw"
         )
-        self.declare_parameter("safe_command_topic", "/leader/cmd_vel")
+        self.declare_parameter(
+            "safe_command_topic", "/leader/approach/cmd_vel_safe"
+        )
 
     def _load_and_validate_parameters(self) -> None:
         """Load and validate finite timing, topic, and velocity parameters."""

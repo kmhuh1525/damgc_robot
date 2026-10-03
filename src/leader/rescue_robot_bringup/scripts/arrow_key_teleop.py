@@ -52,7 +52,7 @@ class ArrowKeyTeleop(Node):
 
         self.declare_parameter(
             "command_topic",
-            "/leader/cmd_vel",
+            "/leader/teleop/cmd_vel",
         )
         self.declare_parameter(
             "gripper_command_topic",

@@ -77,7 +77,7 @@ class SurvivorMapTransformNode(Node):
             self.declare_parameter("target_frame", "map").value
         ).strip()
         self._tf_timeout_sec = float(
-            self.declare_parameter("tf_timeout_sec", 0.2).value
+            self.declare_parameter("tf_timeout_sec", 0.6).value
         )
         if not self._input_topic or not self._output_topic:
             raise ValueError("input_topic and output_topic must not be empty")

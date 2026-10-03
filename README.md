@@ -7,65 +7,70 @@
 - 운반 보조·팔로워 로봇: AprilTag 기반 상대 위치 보정과 협동 운반 지원
 - 공통 하위 제어: STM32 기반 모터·엔코더·IMU·그리퍼 제어
 
-최종 범위는 [개발 계획서](docs/Plan.md), 현재 완료 범위와 다음 작업은
-[개발 현황 및 로드맵](docs/STATUS_AND_ROADMAP.md)을 기준으로 확인합니다.
+최종 목표와 장기 로드맵은 [개발 계획서](docs/Plan.md)와
+[개발 현황 및 로드맵](docs/STATUS_AND_ROADMAP.md)을 참고합니다. 아래 상태 요약과
+실행 방법은 저장소의 2026년 10월 2일 구현 및 검증 결과를 기준으로 합니다.
 
 ## 현재 구현 상태
 
-2026년 9월 18일 기준으로 저장소와 실제 Jetson + D435 실행에서 확인되는 구현은 다음과 같습니다.
+2026년 10월 2일 기준으로 저장소와 Jetson + D435/Docker 실행에서 확인되는 구현은
+다음과 같습니다.
 
-- 리더: URDF/RViz 모델, D435 RGB·depth, RGB 보정, AprilTag 검출, 중앙 depth CSV 측정,
-  exact-stamp TF2 기반 `base_link` pose·metric·상태, raw approach controller와
-  velocity guard를 통한 최종 software topic `/leader/cmd_vel`, 독립
-  [`rescue_robot_survivor`](src/leader/rescue_robot_survivor/README.md) Stage 1 YOLO11n
-  person debug-image pipeline(Stage 1 VERIFIED: 실제 D435에서 1/2/3명 검출 및 debug image 확인),
-  Stage 2 사람별 aligned-depth 거리(`IMPLEMENTED - HARDWARE VERIFICATION REQUIRED`)와 Stage
-  3 CameraInfo.P 기반 camera optical XYZ/debug overlay/다중 `PoseArray`(실제 Jetson + D435
-  `VERIFIED`, 2026-09-12)
+- 리더 인지·접근: URDF/RViz, D435 RGB/depth, RGB 보정, AprilTag 검출, depth CSV 측정,
+  exact-stamp TF2 기반 pose/metric/state, hybrid approach controller와 velocity guard를
+  통한 `/leader/cmd_vel` software 경로가 구현되어 있다.
+- 리더 그리퍼: `leader_apriltag_drive.launch.py`가 Dynamixel node와 gripper sequence를
+  함께 실행한다. 기본값은 `gripper_enabled=true`, RX-28 open `1000`, close `480`,
+  RX-64 lift `300`, speed `50`, `lift_enabled=true`이며 post-align odometry advance도
+  활성화되어 있다. RX-64 raw `500→300` 이동은 hardware로 확인했지만 전체 물품 파지·운반
+  성공은 아직 완료 조건으로 검증하지 않았다.
 - 팔로워: USB 카메라, AprilTag 검출, 기존 camera-frame 상태, exact-stamp TF2 기반
   `base_link` pose·metric·상태, raw approach controller, STOP/APPROACH/COOPERATION
   command selector, 최종 safety guard와 `/follower/safe_cmd_vel`
   - hybrid base 안정화는 `base_stable_time=0.30 s`와 fresh sample 3회 confirmation 사용
   - FINAL_APPROACH/STABILIZING tag loss는 0.30 s 동안 state/mode만 유지하고 velocity는 zero
   - blind final 기본값은 false이며 새 approach session마다 이전 ALIGNED latch reset
-- 추가 구현: STM32 I2C/UART binary protocol, IMU·wheel state 수신, `/cmd_vel`
-  전달, wheel odometry 원시 계산, 엔코더·IMU/VSLAM dual EKF 융합 설정, 모터
-  속도 PID와 watchdog
-- 확인됨: STM32 wheel/IMU 수신, dual EKF·Visual SLAM·nvblox 동시 실행,
-  정지·저속 이동 상태 dual EKF/VSLAM 안정성, Docker RViz의 카메라 및 3차원 mesh 표시
+- 하위 제어: STM32 I2C/UART binary protocol, IMU·wheel state, raw wheel odometry,
+  `/cmd_vel` 전달, motor PID와 watchdog이 구현되어 있다. 과거 dual-EKF 경로도 검증했지만,
+  현재 공식 `run_vslam_mapping.sh` 경로에서는 VSLAM이 `map→odom`과 `odom→base_link`
+  TF를 직접 발행한다.
+- VSLAM·nvblox·Nav2: 단일 D435, VSLAM, nvblox mesh/3D ESDF와 Nav2 planner/controller/
+  BT navigator/lifecycle manager 통합이 구현되어 있다. Nav2 `ComputePathToPose` 경로
+  생성과 `odom` frame은 확인했지만 `/nav2/cmd_vel`은 wheel bridge와 분리되어 있고,
+  현장 controller가 유효 trajectory를 찾지 못해 autonomous driving 완료로 판정하지 않는다.
 - Survivor Stage 5 완료: YOLO person detection, aligned depth 거리,
   camera optical XYZ와 `/leader/survivor/camera_positions`, 원본 촬영 시각의
   camera→map TF2와 `/leader/survivor/map_positions`, sphere/text RViz 표시 및
-  `/leader/survivor/map_markers` 검증 완료. D435 공유 상태에서 VSLAM·dual EKF·
-  nvblox·Survivor 동시 실행과 nvblox 3D map/marker 동시 표시를 수동 확인했다.
+  `/leader/survivor/map_markers` 검증 완료. D435 공유 상태에서 VSLAM·nvblox·Survivor
+  동시 실행과 nvblox 3D map/marker 동시 표시를 수동 확인했다.
 - Survivor Stage 6 Persistent Survivor Registry — VERIFIED: typed `SurvivorTrack` interfaces, spatial one-to-one
   association, tentative→confirmed lifecycle, mission-runtime persistent ID, LOST/
   reassociation, EMA stabilization, reset service와 Registry RViz marker를 추가했다.
--  Stage 6.1 실제 수동 검증에서 여러 사람 distinct persistent ID, moving person same ID,
+- Stage 6.1 실제 수동 검증에서 여러 사람 distinct persistent ID, moving person same ID,
   FOV→LOST, same-ID reassociation, yellow LAST SEEN marker, white status text와
-  Registry text Z+1.0 m를 확인했다. VSLAM·dual EKF·nvblox 위 RViz 표시까지
+  Registry text Z+1.0 m를 확인했다. VSLAM·nvblox 위 RViz 표시까지
   **VERIFIED**다.
-- 진행 중: 저속 주행에서 EKF 안정성과 VSLAM tracking 장시간 검증
-- 협동 미션(2026-09-30 추가, `src/cooperative_mission`): 리더 AprilTag(QR) 탐색·정렬·파지 →
-  팔로워 반대편 이동·파지 → ACK 기반 동시 리프트 → 공통 속도 1초 협동 직진을 조정하는 Mission
-  Coordinator. 소프트웨어·시뮬레이션 시험 완료, **실물 검증 필요**. STM32 펌웨어 변경 없음.
-- 아직 없음: Nav2, process/map-session 외부 영속 저장. `Survivor candidate N`은 현재 PoseArray 인덱스에
-  따른 임시 번호다. Stage 4 raw map stability에는 약 0.115 m의 A→B 변화가 있어
-  정밀 절대 위치 보장은 하지 않는다. 다음 생존자 개발은 association parameter 정확도
-  검증과 장시간 안정성 평가다.
+- 협동 미션(2026-09-30 추가, `src/cooperative_mission`): 리더 태그 정렬·파지 → 팔로워 반대편 파지 → ACK 기반 동시 리프트 → 공통 속도로 1초 협동 직진을 조정한다. 소프트웨어·시뮬레이션 구현은 있으나 실물 검증이 남아 있다.
+- 아직 완료되지 않음: Nav2 autonomous driving, 전체 물품 파지·운반 검증, 실물 리더–팔로워 협동 운반, process/map-session 외부 Survivor ID 저장.
+- Survivor의 `Survivor candidate N`은 현재 PoseArray frame-local 번호이고 Registry ID와
+  다르다. Stage 4 raw map A→B 평균 변화는 약 `0.115 m`였으므로 정밀 절대 위치를
+  보장하지 않는다. 남은 Survivor 작업은 aligned-depth 거리의 정량 하드웨어 검증,
+  association parameter 검증과 장시간 안정성 평가다.
 
 Leader AprilTag pipeline은 guarded `/leader/cmd_vel`에서 I2C STM32 bridge와 motor까지
-통합되어 있습니다. Follower의 `/follower/safe_cmd_vel`은 아직 motor에 연결하지
-않았습니다. 실제 이동 전에는 hardware E-stop과 bridge watchdog을 별도로 확인해야
-합니다.
+통합되어 있습니다. Gripper는 leader 통합 launch에 포함되지만 전체 파지·운반은 별도
+hardware 검증이 필요합니다. Follower의 `/follower/safe_cmd_vel`은 아직 motor에 연결하지
+않았습니다. 실제 이동 전에는 hardware E-stop과 bridge watchdog을 별도로 확인해야 합니다.
 
-## 생존자 인식·지도·RViz 파이프라인 — Stage 5 PASS / Stage 6 Persistent Survivor Registry VERIFIED
+## 생존자 인식·지도·RViz 파이프라인 — Stage 5 PASS / Stage 6.1 Registry VERIFIED
 
 공유 D435의 RGB와 aligned depth에서 YOLO가 사람을 검출하고 camera optical XYZ를
-계산합니다. 검출 영상의 원본 timestamp로 TF2 camera→map 변환을 수행한 뒤,
+계산합니다. 검출 영상의 원본 timestamp로 exact-time TF2 camera→map 변환을 수행한 뒤,
 RViz에 현재 후보의 sphere와 좌표 text를 표시합니다. 같은 D435의 infra1/infra2는
-VSLAM에, RGB/depth는 nvblox 3D mapping에 사용됩니다. Wheel odometry와 IMU는
-dual EKF를 거쳐 `map → odom → base_link` TF를 제공합니다.
+VSLAM에, RGB/depth는 nvblox 3D mapping에 사용됩니다. 현재 공식 mapping 경로에서는
+VSLAM이 `map → odom → base_link` dynamic TF를 발행하고 robot_state_publisher와
+RealSense가 camera chain을 연결합니다. Nav2와 nvblox costmap은 `odom` frame을
+사용하며 Survivor map registration은 `map` frame을 사용합니다.
 
 ```text
 RGB + aligned depth + CameraInfo → YOLO → camera optical XYZ
@@ -80,8 +85,8 @@ RGB + aligned depth + CameraInfo → YOLO → camera optical XYZ
 marker의 동시 표시, 같은 timestamp의 map pose와 sphere 좌표 일치를 확인했습니다.
 Stage 5 Raw Visualizer는 사람 후보가 FOV 밖으로 나간 뒤 marker가 finite lifetime 이후 사라지고, 재진입하면
 다시 생성되는 것을 확인했습니다. 통제된 2명→1명 감소에서는 이전 후보의
-sphere/text 제거도 확인했습니다. VSLAM, local/global EKF, nvblox와 세 survivor
-topic이 동시에 동작했습니다. 저장소의 marker 기본 lifetime은 `2.0 s`이며
+sphere/text 제거도 확인했습니다. VSLAM, nvblox, Nav2와 세 survivor topic이
+동시에 동작했습니다. 저장소의 marker 기본 lifetime은 `2.0 s`이며
 Raw Visualizer의 text 표시 Z offset은 `0.30 m`입니다. offset은 원본 map XYZ를 바꾸지
 않습니다. Stage 6 Registry Visualizer는 sphere를 filtered map position에 유지하고
 Registry text만 `1.0 m` 위에 표시하며, LOST는 노란색 불투명 sphere와 흰색 LAST SEEN
@@ -104,29 +109,26 @@ process/map-session 외부 영속 저장과 CSV/JSON 저장은 구현하지 않�
 Stage 2의 aligned-depth 거리는 실제 파이프라인에서 확인됐지만, 별도 줄자 기준
 거리표 검증은 완료되지 않았습니다.
 
-현재 공식 실행은 다음 3 terminal입니다. 첫 실행기가 D435, VSLAM, nvblox와
-RViz를 시작하므로 카메라 실행기를 중복 기동하지 않습니다. 새 통합 launch의
-3-terminal 정지 상태 동시 실행과 종료 격리는 확인했습니다. 실제 사람 관측 기반
-Stage 6.1 회귀는 아직 별도 검증이 필요합니다.
+현재 공식 Survivor 실행은 다음 2 terminal입니다. 첫 실행기가 D435, VSLAM,
+nvblox와 RViz를 시작하므로 카메라 실행기를 중복 기동하지 않습니다. 통합 launch가
+YOLO detector와 survivor ROS 노드, `rqt_image_view`를 함께 시작합니다.
 
 ```bash
 # Terminal 1 — VSLAM + nvblox + RViz
 cd ~/damgc_robot
 ./scripts/run_vslam_mapping.sh
 
-# Terminal 2 — survivor ROS pipeline
+# Terminal 2 — integrated survivor pipeline (YOLO + survivor nodes + image view)
 cd ~/damgc_robot
 source /opt/ros/humble/setup.bash
-source install/local_setup.bash
+source install/setup.bash
 ros2 launch rescue_robot_bringup survivor_pipeline.launch.py
-
-# Terminal 3 — YOLO detector
-cd ~/damgc_robot
-./scripts/run_survivor_detector.sh
 ```
 
-Raw 후보 marker를 끄려면 Terminal 2 명령에 `enable_raw_visualizer:=false`를
-붙입니다. 전체 설계, 자동 검증 결과와 실물 검증 체크리스트는
+Raw 후보 marker를 끄려면 `enable_raw_visualizer:=false`를, debug GUI를 끄려면
+`show_image_view:=false`를 붙입니다. 통합 launch가 detector를 이미 실행하므로
+`./scripts/run_survivor_detector.sh`를 동시에 실행하지 마십시오. 이 script는
+수동 fallback/debug 용도로 유지됩니다. 전체 설계, 자동 검증 결과와 실물 검증 체크리스트는
 [통합 launch 검증 문서](docs/SURVIVOR_PIPELINE_INTEGRATED_LAUNCH_VALIDATION.md)에 있습니다.
 
 별도 ROS 환경 터미널에서 확인합니다.
@@ -134,7 +136,7 @@ Raw 후보 marker를 끄려면 Terminal 2 명령에 `enable_raw_visualizer:=fals
 ```bash
 cd ~/damgc_robot
 source /opt/ros/humble/setup.bash
-source install/local_setup.bash
+source install/setup.bash
 ros2 topic echo --once /leader/survivor/camera_positions
 ros2 topic echo --once /leader/survivor/map_positions
 ros2 topic echo --once /leader/survivor/map_markers
@@ -158,18 +160,64 @@ ros2 service list | rg /nvblox_node/get_esdf_and_gradient
 측정값과 전체 수동 검증 절차는 [Stage 5 validation](docs/SURVIVOR_VSLAM_MAP_INTEGRATION_STAGE5_RVIZ_VISUALIZATION_VALIDATION.md)에
 기록했습니다.
 
+## VSLAM·nvblox·Nav2 현재 상태
+
+`./scripts/run_vslam_mapping.sh`는 현재 하나의 D435 입력을 RealSense, VSLAM,
+nvblox와 RViz가 공유하도록 실행합니다. 공식 mapping launch의 TF 소유권은 다음과
+같습니다.
+
+```text
+VSLAM                  map → odom, odom → base_link
+robot_state_publisher  base_link → camera_link
+RealSense              camera_link → camera optical frames
+```
+
+nvblox는 `odom` 기준 mesh/3D ESDF와 costmap slice를 제공하고, Nav2는 planner,
+controller, BT navigator와 lifecycle manager를 실행합니다. Nav2 global/local costmap은
+`odom` frame과 nvblox layer를 사용하며, 로컬 costmap 호환 topic은
+`/costmap/costmap`입니다.
+
+현재 검증 범위는 다음과 같습니다.
+
+- Nav2 lifecycle node 활성화
+- `ComputePathToPose` 경로 생성
+- `/plan`의 `odom` frame 확인
+- nvblox mesh와 ESDF service 확인
+- `/nav2/cmd_vel` 발행 확인
+
+`/nav2/cmd_vel`은 Leader selector의 `NAV2` input으로 연결되어 있다. Mapping 시작 시
+selector는 `TELEOP`이며 실제 Nav2 실차 주행은 수행하지 않았다. 따라서 현재 상태를
+완성된 autonomous driving으로 표시하지 않으며, 실장비 이동·반복
+목표 주행·controller valid trajectory 확보가 남아 있습니다. 상세 절차와 2026-10-02
+검증 결과는 [nvblox/Nav2 검증 문서](src/leader/rescue_robot_bringup/docs/NVBLOX_NAV2_RVIZ.md)를
+참고합니다.
+
+기본 상태 확인 명령:
+
+```bash
+ros2 lifecycle get /planner_server
+ros2 lifecycle get /controller_server
+ros2 lifecycle get /bt_navigator
+ros2 action list -t | rg navigate_to_pose
+ros2 topic echo --once /plan --field header.frame_id
+ros2 topic hz /visual_slam/tracking/odometry
+ros2 topic info /nvblox_node/static_map_slice
+ros2 topic info /nav2/cmd_vel
+```
+
 ## 빌드
 
 ```bash
 source /opt/ros/humble/setup.bash
 cd ~/damgc_robot
 colcon build --symlink-install
-source install/local_setup.bash
+source install/setup.bash
 ```
 
-다른 경로에 clone했다면 `cd` 경로만 해당 저장소 루트로 바꿉니다. 두 Orin은
-JetPack 6.2.2, Ubuntu 22.04, ROS 2 Humble과 동일한 의존성 버전을 사용하는 것이
-계획의 기준입니다.
+다른 경로에 clone했다면 `cd` 경로만 해당 저장소 루트로 바꿉니다. JetPack
+6.2.3/L4T R36.5.2, Ubuntu 22.04, ROS 2 Humble과 검증된 survivor Docker runtime
+의존성 조합을 기준으로 합니다. Host global Python에 PyTorch/Ultralytics를 설치하지
+않고 `damgc-survivor-yolo:humble` image를 사용합니다.
 
 실제 장비를 사용할 때는 RealSense D435를 Orin에 연결한 뒤 다음 명령으로 장치가
 인식되는지 먼저 확인합니다.
@@ -251,6 +299,13 @@ enabled되지만 velocity guard는 disabled로 시작하므로, 안전 확인 �
 ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py
 ```
 
+이 통합 launch는 AprilTag 접근·velocity guard·STM32 경로와 함께 선택 가능한
+Dynamixel/gripper sequence도 실행합니다. 기본 gripper gate는 켜져 있지만 velocity
+guard는 별도로 enable해야 실제 바퀴가 움직입니다. gripper-only 또는 안전한 software
+회귀는 `gripper_enabled:=false`로 실행할 수 있습니다. 현재 gripper 설정과 post-align
+odometry 검증 절차는 [Leader AprilTag Drive Run Guide](src/leader/rescue_robot_bringup/docs/LEADER_APRILTAG_DRIVE_RUN_GUIDE.md)를
+따릅니다.
+
 빌드, 상태 확인, 주행 시작·정지와 I2C troubleshooting은
 [Leader AprilTag Drive Run Guide](src/leader/rescue_robot_bringup/docs/LEADER_APRILTAG_DRIVE_RUN_GUIDE.md)를
 따릅니다.
@@ -264,14 +319,18 @@ ros2 launch rescue_robot_bringup leader_apriltag_drive.launch.py
 ros2 launch rescue_robot_bringup camera_apriltag.launch.py \
   enable_depth:=false enable_approach:=true
 ros2 launch leader_approach_control approach_controller.launch.py
+ros2 launch leader_command_selector command_selector.launch.py source_mode:=APPROACH
 ros2 launch leader_approach_control velocity_guard.launch.py
 ```
 
 Component 단독 launch에서는 controller와 guard가 모두 disabled로 시작하므로 enable
-전에는 raw/final command가 zero입니다. 현재 hybrid 정렬은 FAR에서 Tag center를
-추적하고 `0.40 m` 안에서 bounded tag-normal correction을 시작합니다. Pre-align
-`0.30 m`, final target `0.20 m`는 실제 grasp 자세를 확인한 뒤 조정할 초기값입니다.
-STM32/UART/motor에는 연결하지 않습니다.
+전에는 raw/safe command가 zero입니다. Selector는 final `/leader/cmd_vel`을 단독 발행하며,
+실제 주행 시 guard enable과 selector `APPROACH` mode를 모두 확인해야 합니다. 현재 hybrid 정렬은 FAR에서 Tag center를
+추적하고 `0.40 m` 안에서 bounded tag-normal correction을 시작합니다. 통합 leader
+launch의 현재 기본값은 pre-align `0.30 m`, visual final target `0.23 m`, post-align
+grasp target `0.20 m`입니다. `post_align_odom_enabled=true`이면 visual alignment 후
+최대 `0.12 m`·8초 제한의 odometry advance가 수행됩니다. STM32/UART/motor를 사용하지
+않는 component 단독 시험에서는 실제 주행이 발생하지 않습니다.
 
 전체 topic, state priority, enable 순서, 파라미터와 실기·자동시험 결과는
 [Leader velocity pipeline 검증 가이드](src/leader/rescue_robot_apriltag/docs/LEADER_VELOCITY_PIPELINE_VALIDATION_GUIDE.md)를
@@ -307,24 +366,6 @@ heartbeat 또는 명령이 끊기면 0 속도로 정지합니다. 상세 계약�
 모터 없는 네트워크 점검과 실제 장비의 안전한 enable/종료 순서는
 [협동 이동 실행 가이드](docs/COOPERATIVE_TRANSPORT_RUN_GUIDE.md)를 따릅니다.
 
-## 협동 미션: QR 인식 → 파지 → 반대편 파지 → 동시 리프트 → 1초 협동 직진
-
-`cooperative_mission` 패키지가 프로젝트 시나리오 전체를 자동으로 수행합니다. 기존 AprilTag
-인식·접근 controller·command selector·velocity guard·STM32 bridge·Dynamixel 노드를 그대로
-재사용하고, 리더 `mission_coordinator`와 팔로워 `mission_executor`만 추가했습니다.
-
-```bash
-bash scripts/run_cooperative_mission.sh follower   # Follower Orin 먼저
-bash scripts/run_cooperative_mission.sh leader     # Leader Orin, Enter로 시작
-```
-
-1. 리더가 물체 태그를 제자리 탐색으로 찾고 정렬 → 2. 리더 집게 닫기 → 3. 팔로워가 반대 면 태그로
-정렬 후 집게 닫기 → 4. 팔로워 ACK 순간 두 RX-64 동시 리프트 → 5. 리더 공통 속도를 팔로워가 부호
-반전으로 추종해 같은 방향 1.0 s 직진 → 정지·유지. 이후 Enter로 함께 내려놓습니다.
-
-설계·안전 정책은 [cooperative_mission README](src/cooperative_mission/README.md), 실행·보정 절차는
-[협동 미션 실행 가이드](docs/COOPERATIVE_MISSION_RUN_GUIDE.md)를 따릅니다.
-
 ## 팔로워 인식 파이프라인
 
 ```bash
@@ -351,13 +392,26 @@ guard를 각각 enable합니다. 기존 cooperation command는 `/follower/cmd_ve
 AprilTag controller가 이 토픽을 직접 publish하지 않습니다. 현재 base/controller target
 `0.25 m`는 Leader와 맞춘 software-validation 값이지 실제 grasp 거리 확정값은 아닙니다.
 
-전체 topic ownership, enable 순서, 파라미터, 선택 빌드와 236개 자동시험 결과는
+전체 topic ownership, enable 순서, 파라미터와 자동시험 결과는
 [Follower base-link velocity pipeline 검증 가이드](src/follower/follower_supply_perception/docs/FOLLOWER_BASE_LINK_VELOCITY_PIPELINE_VALIDATION_GUIDE.md)를
 참고합니다. Follower 실카메라 RIGHT/TARGET/HIDDEN 시나리오는 아직 `NOT VERIFIED`이며
 사용자가 직접 확인해야 합니다.
 
 상세 토픽과 상태 정의는
 [리더·팔로워 구조](docs/LEADER_FOLLOWER_ARCHITECTURE.md)에서 확인할 수 있습니다.
+
+## 협동 미션: 태그 인식 → 파지 → 동시 리프트 → 운반
+
+`cooperative_mission`은 기존 인식·접근·안전 제어를 재사용하고 리더 `mission_coordinator`와 팔로워 `mission_executor`가 작업 순서를 맞춥니다.
+
+```bash
+bash scripts/run_cooperative_mission.sh follower   # Follower Orin 먼저
+bash scripts/run_cooperative_mission.sh leader     # Leader Orin, Enter로 시작
+```
+
+리더가 태그를 찾아 정렬하고 집게를 닫은 뒤, 팔로워가 물체 반대편 태그를 찾아 정렬·파지합니다. 팔로워의 ACK를 받은 다음 양쪽 RX-64를 들어 올리고, 리더가 공통 속도를 발행하면 팔로워가 마주 보는 좌표계에 맞춰 방향 부호를 변환해 1초간 함께 직진합니다. 링크 단절이나 단계 timeout 시 정지하고 파지를 유지합니다.
+
+설계·안전 정책은 [cooperative_mission README](src/cooperative_mission/README.md), 실기기 실행 절차는 [협동 미션 실행 가이드](docs/COOPERATIVE_MISSION_RUN_GUIDE.md)를 참고합니다. 실제 하드웨어 운반은 별도 검증이 필요합니다.
 
 ## 문서
 
@@ -366,4 +420,7 @@ AprilTag controller가 이 토픽을 직접 publish하지 않습니다. 현재 b
 - [개발 계획서](docs/Plan.md)
 - [개발 현황 및 로드맵](docs/STATUS_AND_ROADMAP.md)
 - [협동 미션 실행 가이드](docs/COOPERATIVE_MISSION_RUN_GUIDE.md)
+- [Survivor 통합 launch 검증](docs/SURVIVOR_PIPELINE_INTEGRATED_LAUNCH_VALIDATION.md)
+- [nvblox/Nav2 검증](src/leader/rescue_robot_bringup/docs/NVBLOX_NAV2_RVIZ.md)
+- [Leader AprilTag Drive 실행 가이드](src/leader/rescue_robot_bringup/docs/LEADER_APRILTAG_DRIVE_RUN_GUIDE.md)
 - [1차 구현·시험 기록](docs/progress/week%201/README.md)

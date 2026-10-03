@@ -1,7 +1,8 @@
 # Survivor Pipeline 통합 Launch 개발·검증
 
 > 기준: `main`, 시작 commit `f088b5d2a6335604a3f2707eed8332b181e9ec98`  
-> 상태: 코드·설치·자동 테스트와 3-terminal 정지 상태 runtime graph/shutdown PASS.
+> 상태: 통합 launch 구현 기준 문서. Docker detector와 optional `rqt_image_view`를
+> 포함한 2-terminal 실행 구조로 갱신 중이며 실제 사람 관측 회귀는 수동 검증 대상이다.
 > 사람 관측이 필요한 Stage 6.1 실물 회귀는 사용자 수동 검증으로 남긴다 (**NOT RUN**).
 
 ## 1. 목적과 개발 배경
@@ -13,27 +14,23 @@ FOV 이탈→LOST, 재연결, 시각화는 Jetson+D435 환경에서 이미 검�
 [Stage 6.1 기록](SURVIVOR_VSLAM_MAP_INTEGRATION_STAGE6_1_REGISTRY_ROBUSTNESS_VALIDATION.md)에 있다.
 
 기능이 안정화된 뒤에도 기존 방식은 mapping, preprocessing, YOLO, map transform,
-raw visualizer, Registry를 위해 여섯 terminal을 요구했다. 명령 반복, node 누락,
-실행 순서 암기, 팀원 간 재현 난이도와 준비 시간이 운영 문제로 남았다. 이번 개발은
-검증된 기능을 재작성하지 않고 ROS 측 launch 네 개를 한 곳에서 조정한다.
+raw visualizer, Registry를 위해 여러 terminal을 요구했다. 이제 검증된 기능을
+재작성하지 않고 survivor launch 하나가 ROS survivor 노드, Docker detector와 optional
+debug GUI를 함께 조정한다.
 
 ## 2. Before / After와 단계적 통합 결정
 
 | 이전 | 현재 |
 | --- | --- |
 | T1 `run_vslam_mapping.sh` | T1 `run_vslam_mapping.sh` |
-| T2 `survivor_camera_processing.launch.py` | T2 `survivor_pipeline.launch.py` |
-| T3 `run_survivor_detector.sh` | T3 `run_survivor_detector.sh` |
-| T4 `survivor_map_transform.launch.py` |  |
-| T5 `survivor_map_visualizer.launch.py` |  |
-| T6 `survivor_registry.launch.py` |  |
+| T2~T6 개별 survivor launch와 detector | T2 `survivor_pipeline.launch.py` |
 
 Mapping 실행기는 STM32, D435 단일 소유권, VSLAM, dual EKF, nvblox, RViz와 rosbag
-cleanup을 함께 관리한다. YOLO 실행기는 NVIDIA runtime, host network/IPC,
-`ROS_DOMAIN_ID`, RMW/FastDDS 환경, model cache, 읽기 전용 workspace mount와 Docker
-container 수명주기를 관리한다. Docker 종료 신호·TTY·cleanup을 ROS launch에 결합하는
-것은 별도 검증이 필요하다. 이 단계의 공식 구조는 mapping / survivor ROS pipeline /
-YOLO detector의 3-terminal 구성이다. `rqt_image_view`도 필요할 때 수동 실행한다.
+cleanup을 함께 관리한다. 통합 survivor launch는 기존 script와 동일한 Docker
+runtime을 process action으로 실행하므로 NVIDIA runtime, host network/IPC, ROS 환경,
+model cache, Docker workspace와 detector 설정을 그대로 사용한다. launch에서는
+non-interactive process compatibility를 위해 Docker TTY flag만 제외한다. `rqt_image_view`는
+`show_image_view:=true`가 기본이며 `false`로 끌 수 있다.
 
 ## 3. Package placement와 dependency
 
@@ -55,21 +52,21 @@ Terminal 1: run_vslam_mapping.sh
 Terminal 2: survivor_pipeline.launch.py                         │
   CameraInfo QoS bridge + RGB rectify ◀─────────────────────────┤
        └─ /leader/camera/color/image_rect ──────────────────┐   │
+  Docker YOLO / Camera XYZ ◀───────────────────────────────┤   │
+       └─ /leader/survivor/debug_image + camera_positions  │   │
   survivor_map_transform ◀── camera_positions ───────────┐ │   │
        └─ /leader/survivor/map_positions                   │ │   │
             ├─ raw visualizer ── map_markers               │ │   │
             └─ Registry ── tracks ── registry visualizer   │ │   │
                                    └─ registry_markers    │ │   │
                                                           │ │   │
-Terminal 3: run_survivor_detector.sh                       │ │   │
-  Docker / YOLO + aligned depth + CameraInfo / Camera XYZ ◀┴─┴───┘
-       └─ /leader/survivor/camera_positions
+  rqt_image_view (optional) ◀── /leader/survivor/debug_image
 ```
 
 새 launch에는 `realsense2_camera`, `robot_state_publisher`, VSLAM, EKF, nvblox,
-STM32, RViz, detector, Docker, `rqt_image_view`, `image_view`가 없다. D435는 Terminal 1만
-시작한다. Terminal 2는 기존 RGB와 CameraInfo를 구독한다. YOLO는 보정 RGB,
-aligned depth, 원본 CameraInfo를 사용한다.
+STM32, RViz, Nav2가 없다. D435는 Terminal 1만 시작한다. Terminal 2는 기존 RGB와
+CameraInfo를 구독하고 기존 Docker detector를 실행한다. YOLO는 보정 RGB, aligned
+depth, 원본 CameraInfo를 사용한다.
 
 ## 5. Child launch와 node ownership
 
@@ -90,13 +87,14 @@ ROS graph에 추가로 보일 수 있으나 transform 복제는 아니다.
 | --- | --- |
 | D435, STM32, VSLAM, dual EKF, nvblox, RViz | Terminal 1 mapping 실행기 |
 | QoS bridge, rectify, map transform, raw marker, Registry, Registry marker | Terminal 2 통합 launch |
-| YOLO, aligned depth association, Camera XYZ | Terminal 3 Docker detector |
-| `rqt_image_view` | 사용자 수동 debug terminal |
+| YOLO, aligned depth association, Camera XYZ, `rqt_image_view` | Terminal 2 통합 launch |
 
 ## 6. Parameter ownership와 startup
 
-통합 launch의 공개 인자는 `enable_raw_visualizer:=true` 하나다. `false`에서는
-raw visualizer만 빠지고 Registry와 Registry marker는 계속 실행된다.
+통합 launch의 공개 인자는 `enable_raw_visualizer:=true`와
+`show_image_view:=true`다. `enable_raw_visualizer:=false`에서는 raw visualizer만
+빠지고 Registry와 Registry marker는 계속 실행된다. `show_image_view:=false`에서는
+GUI만 빠지고 detector와 survivor pipeline은 계속 실행된다.
 각 include는 독립 launch configuration scope에 배치한다. 이는 child launch들이
 공유하는 `input_topic`, `output_topic`, `text_z_offset` 인자명이 서로의 기본값을
 덮어쓰지 못하게 한다. 추가 상위 parameter 기본값은 없다.
@@ -108,18 +106,17 @@ Map transform의 `target_frame=map`, `tf_timeout_sec=0.2` 및 topic 기본값은
 `registry_publish_hz=2.0`, Registry text `text_z_offset=1.0`은
 `survivor_registry.yaml`과 해당 child launch 소유다.
 
-권장 시작 순서는 mapping → survivor pipeline → detector다. Subscriber는 upstream
-publisher가 생길 때까지 대기하며, startup `sleep`/`TimerAction`은 없다.
+권장 시작 순서는 mapping → survivor pipeline이다. Subscriber는 upstream publisher가
+생길 때까지 대기하며, startup `sleep`/`TimerAction`은 없다. 통합 launch 실행 중에는
+`run_survivor_detector.sh`를 별도로 실행하지 않는다.
 
 ## 7. 변경 파일과 보호 범위
 
-추가: `src/leader/rescue_robot_bringup/launch/survivor_pipeline.launch.py`,
-`src/leader/rescue_robot_bringup/test/test_survivor_pipeline_launch.py`, 본 문서.
-변경: `src/leader/rescue_robot_bringup/package.xml` 실행 의존성,
-`src/leader/rescue_robot_bringup/CMakeLists.txt` pytest 등록, root `README.md`와
-`docs/README.md`의 현재 실행 안내.
+변경: `src/leader/rescue_robot_bringup/launch/survivor_pipeline.launch.py`,
+`src/leader/rescue_robot_bringup/test/test_survivor_pipeline_launch.py`,
+`src/leader/rescue_robot_bringup/package.xml`, root `README.md`, 본 문서.
 
-`run_vslam_mapping.sh`, `run_survivor_detector.sh`, 네 child launch,
+`run_vslam_mapping.sh`, 네 child launch,
 `person_detector.launch.py`, `survivor_registry.yaml`, survivor node/core/test는
 변경하지 않았다. 작업 전부터 수정 상태였던 사용자 문서 변경은 보존했다.
 
@@ -178,7 +175,7 @@ bridge 구현을 바꾸지 않았다. 이는 종료 로그의 알려진 결함�
 외부 Terminal 1/3 종료를 뜻하지 않는다. 전체 shutdown isolation은 아래 실물 시험에서
 별도로 판정한다.
 
-## 10. 공식 3-terminal 실행
+## 10. 공식 2-terminal 실행
 
 Terminal 1 — D435, VSLAM, EKF, nvblox, RViz:
 
@@ -187,34 +184,26 @@ cd ~/damgc_robot
 ./scripts/run_vslam_mapping.sh
 ```
 
-Terminal 2 — Survivor ROS pipeline:
+Terminal 2 — Integrated Survivor pipeline (Docker YOLO + survivor nodes + image view):
 
 ```bash
 cd ~/damgc_robot
 source /opt/ros/humble/setup.bash
-source install/local_setup.bash
+source install/setup.bash
 ros2 launch rescue_robot_bringup survivor_pipeline.launch.py
 ```
 
-Raw marker가 필요 없으면 마지막 명령에 `enable_raw_visualizer:=false`를 붙인다.
-
-Terminal 3 — Docker YOLO detector:
-
-```bash
-cd ~/damgc_robot
-./scripts/run_survivor_detector.sh
-```
-
-Debug image는 필요한 때 별도 ROS 환경 terminal에서
-`ros2 run rqt_image_view rqt_image_view`를 실행하고 topic을 고른다.
+Raw marker가 필요 없으면 `enable_raw_visualizer:=false`, debug GUI가 필요 없으면
+`show_image_view:=false`를 붙인다. 통합 launch 실행 중에는
+`./scripts/run_survivor_detector.sh`를 별도로 실행하지 않는다. 이 script는
+수동 fallback/debug 용도로 유지된다.
 
 ## 11. Manual Validation Quick Reference
 
-Terminal 1을 시작하고 D435와 mapping이 준비되면 Terminal 2를 시작한다. Terminal 3
-시작 전 `ros2 node list`에서 preprocessing, transform, 두 visualizer, Registry가
-한 번씩 보이고 `/leader/person_detector`는 없어야 한다. D435 관련 node 수를
-Terminal 2 전후 비교한다. Terminal 3 시작 후 detector와 camera_positions publisher를
-확인한다. 검사용 terminal도 같은 ROS 환경을 source한다.
+Terminal 1을 시작하고 D435와 mapping이 준비되면 Terminal 2를 시작한다. 통합 launch
+후 `ros2 node list`에서 preprocessing, detector, transform, 두 visualizer, Registry와
+Registry visualizer가 한 번씩 보여야 한다. 검사용 terminal도 같은 ROS 환경을
+source한다.
 
 읽기 전용 사전 점검에서 `maze-desktop`의 USB 목록에 D435가 있었고
 `rs-enumerate-devices -s`도 `RealSense D435`를 반환했다. 두 Docker image

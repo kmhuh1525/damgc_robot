@@ -35,7 +35,7 @@ def generate_launch_description():
         SetEnvironmentVariable("LD_LIBRARY_PATH", os.pathsep.join(gxf_library_paths)),
         _include("visual_slam_realsense.launch.py", {
             "publish_odom_to_base_tf": "true",
-            "publish_map_to_odom_tf": "false",
+            "publish_map_to_odom_tf": "true",
             "image_jitter_threshold_ms": "50.0",
         }),
         _include("nvblox_realsense.launch.py"),

@@ -1,12 +1,15 @@
 """ROS 2 node that publishes YOLO11n detections with aligned depth."""
 
 import threading
+import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Pose, PoseArray
 import rclpy
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -157,6 +160,13 @@ class PersonDetectorNode(Node):
         self._model = YOLO(self._model_name)
         self._depth_messages = deque(maxlen=self._sync_queue_size)
         self._depth_lock = threading.Lock()
+        self._depth_event = threading.Event()
+        self._pending_image_lock = threading.Lock()
+        self._pending_image = None
+        self._image_event = threading.Event()
+        self._worker_shutdown = threading.Event()
+        self._image_callbacks = MutuallyExclusiveCallbackGroup()
+        self._sensor_callbacks = MutuallyExclusiveCallbackGroup()
         self._camera_intrinsics: Optional[CameraIntrinsics] = None
         self._camera_frame_id = ""
         self._camera_info_lock = threading.Lock()
@@ -167,16 +177,19 @@ class PersonDetectorNode(Node):
             PoseArray, self._camera_positions_topic, POSITION_QOS
         )
         self._image_subscription = self.create_subscription(
-            Image, self._image_topic, self._image_callback, IMAGE_QOS
+            Image, self._image_topic, self._enqueue_image_callback, IMAGE_QOS,
+            callback_group=self._image_callbacks,
         )
         self._depth_subscription = self.create_subscription(
-            Image, self._aligned_depth_topic, self._depth_callback, IMAGE_QOS
+            Image, self._aligned_depth_topic, self._depth_callback, IMAGE_QOS,
+            callback_group=self._sensor_callbacks,
         )
         self._camera_info_subscription = self.create_subscription(
             CameraInfo,
             self._camera_info_topic,
             self._camera_info_callback,
             CAMERA_INFO_QOS,
+            callback_group=self._sensor_callbacks,
         )
 
         self.get_logger().info(f"Model: {self._model_name}")
@@ -196,6 +209,41 @@ class PersonDetectorNode(Node):
             f"Confidence threshold: {self._confidence_threshold:.3f}"
         )
         self.get_logger().info(f"Selected device: {self._device}")
+        # Inference runs off the ROS executor so depth and incoming RGB keep
+        # arriving while one frame is processed. Only the latest RGB is queued.
+        self._worker = threading.Thread(
+            target=self._worker_loop, name="person_detector_inference", daemon=True
+        )
+        self._worker.start()
+
+    def destroy_node(self):
+        self._worker_shutdown.set()
+        self._image_event.set()
+        self._depth_event.set()
+        self._worker.join(timeout=2.0)
+        return super().destroy_node()
+
+    def _enqueue_image_callback(self, message: Image) -> None:
+        stamp = self._stamp_to_nanoseconds(message)
+        # DDS may deliver an old RGB after a temporary CPU/GPU stall. Skip it
+        # before inference rather than pairing it with a newer depth frame.
+        if stamp and time.time_ns() - stamp > 250_000_000:
+            return
+        with self._pending_image_lock:
+            self._pending_image = message
+            self._image_event.set()
+
+    def _worker_loop(self) -> None:
+        while not self._worker_shutdown.is_set():
+            self._image_event.wait(timeout=0.1)
+            if self._worker_shutdown.is_set():
+                break
+            with self._pending_image_lock:
+                message = self._pending_image
+                self._pending_image = None
+                self._image_event.clear()
+            if message is not None:
+                self._image_callback(message)
 
     def _validate_parameters(self) -> None:
         if not self._image_topic:
@@ -291,9 +339,26 @@ class PersonDetectorNode(Node):
         return message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec
 
     def _depth_callback(self, message: Image) -> None:
-        """Cache recent aligned depth for non-blocking RGB processing."""
+        """Keep the newest valid stamps, even if depth arrives out of order."""
+        stamp = self._stamp_to_nanoseconds(message)
+        if stamp == 0:
+            return
         with self._depth_lock:
-            self._depth_messages.append(message)
+            messages = list(self._depth_messages)
+            messages.append(message)
+            newest = max(self._stamp_to_nanoseconds(item) for item in messages)
+            # Bound retained age as well as count; never let a late old frame
+            # displace a newer one from the synchronization cache.
+            cutoff = newest - 500_000_000
+            messages = [
+                item for item in messages
+                if self._stamp_to_nanoseconds(item) >= cutoff
+            ]
+            messages.sort(key=self._stamp_to_nanoseconds)
+            self._depth_messages = deque(
+                messages[-self._sync_queue_size:], maxlen=self._sync_queue_size
+            )
+        self._depth_event.set()
 
     def _camera_info_callback(self, message: CameraInfo) -> None:
         """Cache valid rectified intrinsics from CameraInfo.P."""
@@ -315,7 +380,7 @@ class PersonDetectorNode(Node):
             self._camera_intrinsics = intrinsics
             self._camera_frame_id = message.header.frame_id
 
-    def _get_matching_depth(self, rgb_message: Image):
+    def _nearest_depth(self, rgb_message: Image):
         with self._depth_lock:
             depth_messages = tuple(self._depth_messages)
         if not depth_messages:
@@ -330,21 +395,48 @@ class PersonDetectorNode(Node):
         ]
         if not matching:
             return None
-        delta_ns, depth_message = min(matching, key=lambda item: item[0])
+        return min(matching, key=lambda item: item[0])
+
+    def _get_matching_depth(self, rgb_message: Image):
+        rgb_stamp = self._stamp_to_nanoseconds(rgb_message)
+        nearest = self._nearest_depth(rgb_message)
+        if nearest is None:
+            return None
+        delta_ns, depth_message = nearest
         delta_sec = delta_ns / 1e9
         if delta_sec > self._sync_slop_sec:
+            signed_sec = (
+                self._stamp_to_nanoseconds(depth_message) - rgb_stamp
+            ) / 1e9
             self.get_logger().warning(
                 "RGB/aligned depth timestamp difference is "
-                f"{delta_sec:.3f}s; using N/A.",
+                f"{delta_sec:.3f}s (depth minus RGB {signed_sec:+.3f}s, "
+                f"RGB age {(time.time_ns() - rgb_stamp) / 1e9:.3f}s); "
+                "using N/A.",
                 throttle_duration_sec=5.0,
             )
             return None
         return depth_message
 
-    def _estimate_distances(self, people, rgb_message: Image, rgb_shape):
+    def _wait_for_matching_depth(self, rgb_message: Image, timeout_sec=0.15):
+        """Allow an aligned depth callback to catch up without widening slop."""
+        deadline = time.monotonic() + timeout_sec
+        preferred_delta_ns = int(min(self._sync_slop_sec, 0.04) * 1e9)
+        while True:
+            self._depth_event.clear()
+            nearest = self._nearest_depth(rgb_message)
+            if nearest is not None and nearest[0] <= preferred_delta_ns:
+                return nearest[1]
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return self._get_matching_depth(rgb_message)
+            self._depth_event.wait(remaining)
+
+    def _estimate_distances(
+        self, people, rgb_message: Image, rgb_shape, depth_message
+    ):
         distances = {number: None for number in range(1, len(people) + 1)}
         rois = {}
-        depth_message = self._get_matching_depth(rgb_message)
         if depth_message is None:
             return distances, rois
         try:
@@ -469,6 +561,8 @@ class PersonDetectorNode(Node):
 
     def _image_callback(self, message: Image) -> None:
         camera_points: Dict[int, Optional[CameraPoint]] = {}
+        # Pair at callback entry, before YOLO can outlast the five-frame cache.
+        depth_message = self._wait_for_matching_depth(message)
         try:
             image = self._bridge.imgmsg_to_cv2(
                 message, desired_encoding="bgr8"
@@ -491,7 +585,9 @@ class PersonDetectorNode(Node):
             )
             # Depth is optional: RGB detection and debug output remain alive
             # while the aligned stream is absent or temporarily mismatched.
-            distances, rois = self._estimate_distances(people, message, image.shape)
+            distances, rois = self._estimate_distances(
+                people, message, image.shape, depth_message
+            )
             camera_points = self._estimate_camera_points(
                 distances, rois, message, image.shape
             )
@@ -524,15 +620,20 @@ def main(args=None) -> None:
     """Run the person detector until ROS shutdown."""
     rclpy.init(args=args)
     node = None
+    executor = None
     try:
         node = PersonDetectorNode()
-        rclpy.spin(node)
+        executor = MultiThreadedExecutor(num_threads=2)
+        executor.add_node(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     except Exception as error:
         rclpy.logging.get_logger("person_detector").fatal(str(error))
         raise SystemExit(1) from error
     finally:
+        if executor is not None:
+            executor.shutdown()
         if node is not None:
             node.destroy_node()
         if rclpy.ok():
