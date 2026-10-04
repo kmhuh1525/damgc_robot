@@ -205,7 +205,7 @@ def test_release_after_done_returns_both_to_idle_and_lowers_together() -> None:
     world.settle(0.3)
     assert world.follower.state == FollowerState.IDLE
     lower_l = [t for t, v in world.L.gripper_log if v[0] == 600.0]
-    lower_f = [t for t, v in world.F.gripper_log if v[0] == 600.0]
+    lower_f = [t for t, v in world.F.gripper_log if v[0] == 270.0]
     assert lower_l and lower_f and 0.0 <= lower_l[0] - lower_f[0] <= 0.01
     # Mission can run again after release, even though both robots are still
     # latched ALIGNED at their grasp poses from the first run.

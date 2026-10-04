@@ -23,7 +23,7 @@ PROFILES = {
         "rx28_id": 2, "rx28_min": 1, "rx28_max": 1021,
     },
     "follower": {
-        "rx64_id": 50, "rx64_min": 260, "rx64_max": 670,
+        "rx64_id": 50, "rx64_min": 20, "rx64_max": 270,
         "rx28_id": 1, "rx28_min": 1, "rx28_max": 1021,
     },
 }

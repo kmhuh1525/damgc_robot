@@ -148,11 +148,12 @@ Hybrid Alignment
                                          → lift_enabled?
                                              false → DONE
                                              true  → close_wait
-                                                   → RX-64 speed 50 / raw 300
+                                                   → RX-64 speed 50 / raw 20
                                                    → LIFTING → DONE
 
 Dynamixel profile/namespace: follower
-Default: lift_enabled=true, lift_raw=300, rx64_speed=50
+Default: lift_enabled=true, lift_raw=20, rx64_speed=50
+Follower RX-64 range: raw 20..270 (20=highest, 270=lowest)
 ```
 
 기본값은 다음과 같다.
@@ -166,7 +167,7 @@ Default: lift_enabled=true, lift_raw=300, rx64_speed=50
 | `gripper_open_raw` | `950` | RX-28 OPEN Goal Position |
 | `gripper_close_raw` | `350` | RX-28 CLOSE Goal Position |
 | `lift_enabled` | `true` | RX-64 정상 lift path의 enable |
-| `lift_raw` | `300` | RX-64 Goal Position; valid range 260..670 |
+| `lift_raw` | `20` | RX-64 Goal Position; valid range 20..270 (20=highest, 270=lowest) |
 | `rx64_speed` | `50` | RX-64 Moving Speed raw 값 |
 | child `close_wait` | `3.0 s` | lift enabled일 때 CLOSE와 LIFT 사이 대기 |
 | child `startup_pose_enabled` | shared `true`, Follower override `false` | launch 직후 Goal Position write 차단 |
@@ -174,8 +175,9 @@ Default: lift_enabled=true, lift_raw=300, rx64_speed=50
 | child `tag_lost_idle_enabled` | shared `true`, Follower override `false` | Tag flicker에 의한 idle reposition 차단 |
 
 기본 sequence는 `Tag detected → RX-28 OPEN 950 → approach → ALIGNED → RX-28
-CLOSE 350 → close_wait 3.0 s → RX-64 speed 50 / Goal Position 300 → DONE`이다.
-RX-64 raw `500 → 300` 이동은 Moving Speed raw `50`에서 실제 hardware로 검증되었다.
+CLOSE 350 → close_wait 3.0 s → RX-64 speed 50 / Goal Position 20 → DONE`이다.
+Follower RX-64 운용 범위는 지정된 raw `20..270`이며, `20=최고`, `270=최저`다. 기존
+raw `500 → 300` 시험 기록은 이전 프로파일 기준이므로 현재 follower 목표로 사용하지 않는다.
 속도를 낮춘 목적은 파지 후 lift를 천천히 동작시켜 물체 이동을 안정화하는 것이다.
 `lift_raw`는 Goal Position raw target이고 `rx64_speed`는 주소 32의 Moving Speed raw
 값이다. Speed raw `0`은 정지가 아니라 속도 제한 없는 최대 속도를 의미한다.
@@ -215,7 +217,7 @@ ros2 launch follower_supply_perception follower_apriltag_drive.launch.py \
 
 ```bash
 ros2 launch follower_supply_perception follower_apriltag_drive.launch.py \
-  rx64_speed:=50 lift_raw:=300
+  rx64_speed:=50 lift_raw:=20
 ```
 
 유효한 값이면 `ALIGNED → RX-28 CLOSE → close_wait → RX-64 lift_raw → LIFTING →
@@ -261,7 +263,7 @@ Leader shared behavior는 기존 기본값을 유지한다.
 3. Tag를 표시해 RX-28만 OPEN 950으로 한 번 이동하고 RX-64는 정지하는지 확인한다.
 4. 주변 안전 확인 후에만 velocity guard를 열어 approach, `FINAL_APPROACH`,
    `STABILIZING`, `ALIGNED`를 진행한다. RX-28 CLOSE 350을 확인한다.
-5. 기존 close wait 3초 후 RX-64가 천천히 raw 300으로 이동하고 DONE이 되는지 확인한다.
+5. 기존 close wait 3초 후 RX-64가 천천히 raw 20(최고 위치)으로 이동하고 DONE이 되는지 확인한다.
 6. temporary Tag loss를 만들어 unexpected gripper reposition이 없는지 확인한다.
 7. `lift_enabled:=false`로 재실행해 OPEN/CLOSE 후 RX-64가 움직이지 않는지 확인한다.
 
@@ -293,7 +295,7 @@ Leader shared behavior는 기존 기본값을 유지한다.
   ID `50` 및 케이블·전원을 확인한다.
 - RX-28 속도가 달라졌다면 이번 변경에는 RX-28 Moving Speed write가 없으므로 regression
   또는 다른 Dynamixel process를 확인한다.
-- raw 300 validation error는 실행 중 profile과 RX-64 range `260..670`을 확인한다.
+- lift target validation error는 실행 중 profile과 RX-64 range `20..270`을 확인한다.
 - launch 직후 wheel이 움직이면 `/follower/velocity_guard/enable` 상태와 중복 motor
   publisher를 확인하고 guard를 즉시 닫는다.
 

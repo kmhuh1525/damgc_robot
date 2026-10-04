@@ -71,8 +71,8 @@ def generate_launch_description() -> LaunchDescription:
         ),
         DeclareLaunchArgument(
             "lift_raw",
-            default_value="300",
-            description="Follower RX-64 lift raw goal (valid range 260..670)",
+            default_value="20",
+            description="Follower RX-64 lift raw goal (valid range 20..270; 20=raised, 270=lowered)",
         ),
         DeclareLaunchArgument(
             "use_stm32_bridge",

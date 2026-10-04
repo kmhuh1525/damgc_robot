@@ -97,11 +97,14 @@ def test_follower_rx64_speed_uses_follower_id_and_never_rx28(sdk_controller):
     )
 
 
-@pytest.mark.parametrize("robot", ["leader", "follower"])
-def test_lift_raw_300_is_valid_for_each_rx64_profile(robot):
+@pytest.mark.parametrize(
+    ("robot", "expected_range"),
+    [("leader", (260, 670)), ("follower", (20, 270))],
+)
+def test_rx64_raw_range_matches_robot_profile(robot, expected_range):
     profile = module.get_profile(robot)
 
-    assert profile["rx64_min"] <= 300 <= profile["rx64_max"]
+    assert (profile["rx64_min"], profile["rx64_max"]) == expected_range
 
 
 def test_rx64_speed_rejects_out_of_range_value_without_write(sdk_controller):

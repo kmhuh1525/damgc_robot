@@ -135,18 +135,19 @@ enable/disable은 `/follower/approach/enabled`를 통해 perception의 approach-
 정책만 다음과 같이 고정했다.
 
 - `gripper_enabled=true`, `robot=follower`, OPEN `950`, CLOSE `350`
-- `lift_enabled=true`, `lift_raw=300`, `rx64_speed=50`
+- Historical validation used `lift_raw=300`, `rx64_speed=50` under the former `260..670` profile.
 - startup pose/torque disabled: Tag 전 RX-64/RX-28 position/torque write 없음
 - Tag-loss idle disabled: detection flicker에 따른 reposition 없음
 - OPEN `[-1,950,-1,1]`, CLOSE `[-1,350,-1,1]`
 - sequence status `/follower/sequence/status`
 - wheel velocity guard startup disabled 유지
 
-RX-64 Moving Speed는 Protocol 1.0 주소 `32`에 2-byte raw 값 `50`을 연결 시 한 번 쓰고,
-CLOSE 후 기존 `close_wait=3.0 s`가 지나면 targeted Goal Position command
-`[300,-1,1,-1]`을 정확히 한 번 발행하여 `LIFTING → DONE`으로 진행한다. raw 300은
-Follower RX-64 profile `260..670` 안에 있다. 실제 hardware에서 RX-64 `500 → 300` 이동과
-speed `50`이 검증되었으며, RX-28 Moving Speed register에는 write하지 않는다.
+RX-64 Moving Speed는 Protocol 1.0 주소 `32`에 2-byte raw 값 `50`을 연결 시 한 번 쓴다.
+당시에는 CLOSE 후 `close_wait=3.0 s`가 지나면 targeted Goal Position command
+`[300,-1,1,-1]`을 정확히 한 번 발행하여 `LIFTING → DONE`으로 진행했다. 이 기록의
+RX-64 `500 → 300` hardware 동작과 speed `50` 검증은 이전 `260..670` profile 기준이다.
+현재 follower profile은 raw `20..270`이며 `20=raised`, `270=lowered`로 설정되었다.
+RX-28 Moving Speed register에는 write하지 않는다.
 
 `lift_enabled:=false`는 OPEN/CLOSE까지만 수행하고 RX-64 Goal Position을 생략한다.
 `gripper_enabled:=false`는 speed 설정을 포함한 두 gripper child를 모두 제외한다. 실제
@@ -171,7 +172,7 @@ hardware 절차는 README를 따르며 자동 검증에서는 actuator 또는 wh
 - 변경 package `rescue_robot_tools`, `rescue_robot_bringup`,
   `follower_supply_perception` symlink build 성공
 - focused shared/Leader/Follower tests: 47 passed
-- Leader/Follower `--show-args`: `lift_enabled=true`, `lift_raw=300`,
+- Leader `--show-args` historical result: `lift_enabled=true`, `lift_raw=300`,
   `rx64_speed=50` 확인
 - `colcon test-result --verbose`: 549 tests, 0 errors, 0 failures, 0 skipped
 - mock SDK로 RX-64 ID/주소 32/2-byte/raw 50 및 통신 오류 확인

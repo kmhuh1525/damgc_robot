@@ -2,6 +2,8 @@
 
 최신 계산식 변경은 [Leader d812a04 동기화 기록](FOLLOWER_LEADER_D812A04_SYNC.md)을 따른다.
 아래 초기 준비 검증 기록 이후 Leader의 직접 곡률 변환식도 적용했다.
+이후 사용자 요청으로 실차 실행의 이동·I2C 쓰기를 true로 전환했다.
+실제 실행 결과와 최종 상태는 [최종 진행 기록](FOLLOWER_COOPERATIVE_TRANSPORT_PROGRESS_2026-10-04.md)을 따른다.
 
 ## 완료한 작업
 

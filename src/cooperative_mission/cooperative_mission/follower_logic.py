@@ -78,7 +78,8 @@ class FollowerMissionConfig:
     # Follower profile defaults from follower_apriltag_drive.launch.py
     gripper: GripperParameters = field(
         default_factory=lambda: GripperParameters(
-            open_raw=950, close_raw=350, lift_raw=300, lower_raw=600
+            open_raw=950, close_raw=350, lift_raw=20, lower_raw=270,
+            rx64_min=20, rx64_max=270,
         )
     )
     grasp_settle_time: float = 2.0

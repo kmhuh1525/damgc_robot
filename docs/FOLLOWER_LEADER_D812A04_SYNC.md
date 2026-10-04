@@ -1,5 +1,8 @@
 # Leader d812a04 계산식 동기화
 
+아래 배포 상태는 계산식 적용 당시의 기록이다. 이후의 이동 허용 설정과 실제 실행
+결과는 [최종 진행 기록](FOLLOWER_COOPERATIVE_TRANSPORT_PROGRESS_2026-10-04.md)을 따른다.
+
 2026-10-04. 원본은 `rbgusrns/damgc_robot`의
 [d812a04](https://github.com/rbgusrns/damgc_robot/commit/d812a04d94653b6941228c18fc24f301a3a71c29)와
 [Follower 인계 계약](https://github.com/rbgusrns/damgc_robot/blob/d812a04d94653b6941228c18fc24f301a3a71c29/docs/COOP_TRANSPORT_FOLLOWER_HANDOFF.md)이다.

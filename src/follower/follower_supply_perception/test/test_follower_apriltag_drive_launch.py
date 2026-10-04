@@ -86,7 +86,7 @@ def test_integrated_gripper_uses_follower_profile_and_alignment_values() -> None
     assert 'default_value="950"' in source
     assert 'default_value="350"' in source
     assert '"rx64_speed",\n            default_value="50"' in source
-    assert '"lift_raw",\n            default_value="300"' in source
+    assert '"lift_raw",\n            default_value="20"' in source
     assert '"lift_enabled",\n            default_value="true"' in source
     assert '"robot": "follower"' in source
     assert source.count('"robot": "follower"') == 2

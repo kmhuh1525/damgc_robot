@@ -101,7 +101,7 @@ class World:
             robot.selector = str(action.value) if success else robot.selector
         elif action.kind == ActionKind.GRIPPER:
             robot.gripper_log.append((now, tuple(action.value)))
-            if action.value[0] == 300.0 and action.value[1] < 0:  # RX-64 lift_raw
+            if action.value[0] == logic._c.gripper.lift_raw and action.value[1] < 0:
                 robot.lift_times.append(now)
         if robot.drop_confirmations:
             return

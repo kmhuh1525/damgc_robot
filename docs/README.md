@@ -5,6 +5,10 @@
 
 ## 먼저 읽을 문서
 
+현재 Follower 협동 운반 상태는
+[2026-10-04 최종 진행 기록](FOLLOWER_COOPERATIVE_TRANSPORT_PROGRESS_2026-10-04.md)을 먼저 읽는다.
+실제 READY/예약 출발/ARRIVED/DONE 관측, heartbeat loss 이력, 실행 설정과 남은 작업을 담았다.
+
 1. [개발 계획서](Plan.md) — 2026년 7월 13일~9월 14일의 목표, 역할, 9주 일정과 평가 기준
 2. [개발 현황 및 로드맵](STATUS_AND_ROADMAP.md) — 2026년 9월 14일까지 반영한 구현 상태, 주차 게이트와 우선순위
 3. [Visual SLAM 준비 및 검증 절차](VISUAL_SLAM_SETUP.md) — 현재 입력·TF 점검, rosbag 기록과 SLAM 연동 순서
