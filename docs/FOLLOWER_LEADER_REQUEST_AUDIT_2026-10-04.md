@@ -60,3 +60,6 @@
 Follower의 기존 단독 경로 생성/추종 결과는
 [경로 추종 진행상황](COOPERATIVE_PATH_TRACKING_PROGRESS.md)에 있다.
 새 수동 파지 peer는 코드 준비와 실제 통합 확인을 구분해서 관리해야 한다.
+
+후속 Follower 준비 작업에서 새 패키지의 빌드·격리 ROS 검증·기본 이동 차단과
+코드 공유를 진행했다. 최신 상태는 [Follower 준비 기록](FOLLOWER_MANUAL_TRANSPORT_PREPARATION.md)을 따른다.

@@ -58,3 +58,7 @@ Peer packet의 body에는 frame, 기하 파라미터, Leader/Follower 차축 pos
 ## 구현 출처와 작업 상태
 
 이 인계 메모는 공용 브랜치의 [협동 경로 추종 진행상황](COOPERATIVE_PATH_TRACKING_PROGRESS.md)과 현재 작업 트리에 있는 `src/cooperative_transport` peer 초안을 대조해 작성했다. `cooperative_transport` 디렉터리는 현재 미커밋/untracked 상태라 GitHub에서 코드를 볼 수 없다. 이 문서가 공유하는 것은 우선 Leader가 맞춰야 할 인터페이스와 인수 조건이며, 코드 병합 전 실제 topic/action/service 이름이 바뀌면 이 문서도 함께 갱신한다.
+
+2026-10-04 준비 작업 후속 기록: 새 peer 패키지의 Follower 빌드·격리 검증과
+기본 이동 차단 설정은 [Follower 준비 상태](FOLLOWER_MANUAL_TRANSPORT_PREPARATION.md)에 있다.
+위 미커밋 상태 설명은 최초 인계 조사 당시의 기록이다.
