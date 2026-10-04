@@ -133,3 +133,9 @@ hinges is required. Hardware-loaded operation has not been tested here.
 
 Follower preparation and verification: see
 [`FOLLOWER_MANUAL_TRANSPORT_PREPARATION.md`](../../docs/FOLLOWER_MANUAL_TRANSPORT_PREPARATION.md).
+
+The active Leader-to-object conversion now matches leader repository
+`rbgusrns/damgc_robot` commit `d812a04`: derive the hinge angle directly from
+smoothed Leader axle curvature. See
+[`FOLLOWER_LEADER_D812A04_SYNC.md`](../../docs/FOLLOWER_LEADER_D812A04_SYNC.md)
+for the source, parity fixtures, and current no-drive deployment settings.

@@ -42,6 +42,22 @@ def pose(p):
 def digest(body):
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
+def densify_path(points):
+    """Preserve Nav2 segments and endpoints with at most 5cm sample spacing."""
+    result = [points[0]]
+    for a, b in zip(points, points[1:]):
+        count = max(1, math.ceil(math.hypot(b.x-a.x, b.y-a.y)/.05))
+        if len(result)+count > 4000:
+            raise ValueError('densified path exceeds 4000 poses')
+        delta_yaw = normalize_angle(b.yaw-a.yaw)
+        for index in range(1, count):
+            fraction = index/count
+            result.append(Pose2D(a.x+(b.x-a.x)*fraction,
+                                 a.y+(b.y-a.y)*fraction,
+                                 normalize_angle(a.yaw+delta_yaw*fraction)))
+        result.append(b)
+    return tuple(result)
+
 def map_pose(p, source, destination):
     a = normalize_angle(destination.yaw-source.yaw)
     dx, dy = p.x-source.x, p.y-source.y
@@ -308,7 +324,7 @@ class TransportPeer(Node):
             self.local_check(stationary=True)
             if msg.header.frame_id != self.odom_frame or len(msg.poses) < 3 or len(msg.poses) > 4000:
                 raise ValueError('path needs 3..4000 poses in leader odometry frame')
-            points = tuple(pose(p.pose) for p in msg.poses)
+            points = densify_path(tuple(pose(p.pose) for p in msg.poses))
             first = points[0]
             if math.hypot(first.x-self.robot.x, first.y-self.robot.y) > .05 or abs(normalize_angle(first.yaw-self.robot.yaw)) > math.radians(3):
                 raise ValueError('path does not begin at current leader pose/heading')
@@ -329,7 +345,7 @@ class TransportPeer(Node):
             body = {'frame': msg.header.frame_id,
                     'geometry': [self.geometry.axle_to_hinge, self.geometry.hinge_to_contact,
                                  self.geometry.object_center_to_contact, self.geometry.hinge_limit],
-                    'leader': [[p.x,p.y,p.yaw] for p in formation.leader],
+                    'leader': [[p.x,p.y,p.yaw] for p in points],
                     'follower': [[p.x,p.y,p.yaw] for p in formation.follower],
                     'expected_follower': [expected.x, expected.y, expected.yaw],
                     'speed': self.p('speed')}
@@ -533,7 +549,11 @@ class TransportPeer(Node):
         self.path = tuple(map_pose(point, expected, self.start_pose) for point in path)
         if math.hypot(self.path[0].x-self.robot.x,self.path[0].y-self.robot.y) > .05 or abs(normalize_angle(self.path[0].yaw-self.robot.yaw)) > math.radians(3):
             raise ValueError('initial follower alignment does not match neutral assembly')
-        self.speed = min(float(body['speed']), self.p('speed'))
+        if math.hypot(self.path[-1].x-self.robot.x,self.path[-1].y-self.robot.y) <= .075:
+            raise ValueError('follower goal already within arrival tolerance')
+        self.speed = float(body['speed'])
+        if abs(self.speed-self.p('speed')) > 1e-6:
+            raise ValueError('configured cooperative speeds differ')
         if not math.isfinite(self.speed) or self.speed <= 0:
             raise ValueError('invalid speed')
         self.index, self.progress, self.peer_progress = 0, 0., 0.

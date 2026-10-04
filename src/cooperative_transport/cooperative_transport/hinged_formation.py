@@ -152,6 +152,24 @@ def _equilibrium_hinge_angle(curvature: float, geometry: HingeGeometry) -> float
     return phase + math.asin(argument)
 
 
+def _hinge_angle_from_leader_curvature(curvature: float, geometry: HingeGeometry) -> float:
+    """Solve the steady hinge angle from leader axle curvature.
+
+    For a constant-curvature leader axle path, the object-center velocity must
+    be tangent to its heading. With ``q = object_yaw - leader_yaw``, this gives
+    ``sin(q) - k * axle_to_hinge * cos(q) = k * longitudinal_offset``.
+    This avoids treating leader curvature as object curvature and iterating an
+    unstable offset-path inversion.
+    """
+    axle = geometry.axle_to_hinge
+    offset = geometry.longitudinal_offset
+    phase = math.atan(curvature * axle)
+    argument = curvature * offset / math.sqrt(1.0 + (curvature * axle) ** 2)
+    if not math.isfinite(argument) or abs(argument) > 1.0:
+        raise ValueError("leader curvature has no passive-hinge solution")
+    return phase + math.asin(argument)
+
+
 def leader_path_to_object_path(
     leader_path: Sequence[Pose2D],
     geometry: HingeGeometry,
@@ -161,11 +179,11 @@ def leader_path_to_object_path(
     iterations: int = 16,
     validate_curvature: bool = True,
 ) -> Tuple[Tuple[Pose2D, ...], "FormationPath"]:
-    """Invert a leader axle path into the shared object path.
+    """Recover the object path directly from smoothed leader axle curvature.
 
-    The hinge angle depends on object-path curvature, so the conversion
-    iterates between the measured leader curvature and reconstructed object
-    curvature. A forward conversion is then checked against the source path.
+    Matches leader commit d812a04. ``iterations`` remains a compatibility
+    argument; the unstable iterative inversion is no longer performed.
+    Generated axle poses are still checked against the input leader path.
     """
     if len(leader_path) < 3:
         raise ValueError("leader path needs at least three poses to estimate curvature")
@@ -173,7 +191,9 @@ def leader_path_to_object_path(
         raise ValueError("iterations must be positive")
     geometry.validate()
     def smooth(values: Sequence[float]) -> Tuple[float, ...]:
-        radius = min(3, max(1, len(values) // 30))
+        # The input path is resampled at 5cm. A 0.5m window suppresses
+        # one-sample heading noise before it is amplified by the offset hinge.
+        radius = min(5, max(1, len(values) // 10))
         return tuple(
             sum(values[max(0, index - radius):min(len(values), index + radius + 1)])
             / len(values[max(0, index - radius):min(len(values), index + radius + 1)])
@@ -181,32 +201,22 @@ def leader_path_to_object_path(
         )
 
     axle_curvatures = smooth(path_curvatures(leader_path))
-    object_curvatures = tuple(axle_curvatures)
-    object_path: Tuple[Pose2D, ...] = ()
-    for _ in range(iterations):
-        reconstructed = []
-        for base, curvature in zip(leader_path, object_curvatures):
-            hinge_angle = _equilibrium_hinge_angle(curvature, geometry)
-            object_yaw = normalize_angle(base.yaw + hinge_angle)
-            reconstructed.append(
-                Pose2D(
-                    base.x
-                    + geometry.axle_to_hinge * math.cos(base.yaw)
-                    + geometry.longitudinal_offset * math.cos(object_yaw),
-                    base.y
-                    + geometry.axle_to_hinge * math.sin(base.yaw)
-                    + geometry.longitudinal_offset * math.sin(object_yaw),
-                    object_yaw,
-                )
+    object_path_list = []
+    for base, curvature in zip(leader_path, axle_curvatures):
+        hinge_angle = _hinge_angle_from_leader_curvature(curvature, geometry)
+        object_yaw = normalize_angle(base.yaw + hinge_angle)
+        object_path_list.append(
+            Pose2D(
+                base.x
+                + geometry.axle_to_hinge * math.cos(base.yaw)
+                + geometry.longitudinal_offset * math.cos(object_yaw),
+                base.y
+                + geometry.axle_to_hinge * math.sin(base.yaw)
+                + geometry.longitudinal_offset * math.sin(object_yaw),
+                object_yaw,
             )
-        object_path = tuple(reconstructed)
-        updated = smooth(path_curvatures(object_path))
-        # Damping prevents noisy sampled path curvature from amplifying through
-        # the offset hinge geometry during the fixed-point inversion.
-        object_curvatures = tuple(
-            0.65 * previous + 0.35 * current
-            for previous, current in zip(object_curvatures, updated)
         )
+    object_path = tuple(object_path_list)
 
     formation = object_path_to_robot_paths(
         object_path,

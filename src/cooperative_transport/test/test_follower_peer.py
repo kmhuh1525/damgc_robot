@@ -6,6 +6,7 @@ import json
 import math
 import time
 import tempfile
+from pathlib import Path
 
 import pytest
 import rclpy
@@ -241,3 +242,16 @@ def test_valid_hash_with_wrong_follower_path_rejected(rig):
     packet['hash'] = digest(packet['body'])
     rig.wire.publish(String(data=json.dumps(packet)))
     rig.wait(lambda: rig.peer.state == 'STOPPED')
+
+
+def test_real_leader_transition_packet_reaches_ready_without_motion(rig):
+    fixture = json.loads((Path(__file__).parent/'fixtures/leader_d812a04_paths.json').read_text())
+    packet = rig.packet()
+    packet['body'] = fixture['cases'][1]['body']
+    packet['hash'] = digest(packet['body'])
+    rig.wire.publish(String(data=json.dumps(packet)))
+    rig.heartbeat = True
+    rig.wait(lambda: rig.peer.state == 'READY')
+    rig.spin(.1)
+    assert rig.selector.get_parameter('source_mode').value == 'STOP'
+    assert all(v == (0.,0.) for v in rig.safe)
