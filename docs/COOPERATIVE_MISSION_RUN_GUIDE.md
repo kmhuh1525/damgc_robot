@@ -1,4 +1,4 @@
-# 협동 미션 실행 가이드 (QR 인식 → 파지 → 반대편 파지 → 동시 리프트 → 1초 협동 직진)
+# 협동 미션 실행 가이드 (AprilTag 파지 → 동시 리프트 → 협동 운반)
 
 ## 1. 시나리오와 구현 위치
 
@@ -89,6 +89,39 @@ ros2 service call /mission/abort   std_srvs/srv/Trigger
 ros2 service call /mission/release std_srvs/srv/Trigger
 ros2 service call /mission/reset   std_srvs/srv/Trigger
 ```
+
+### 4.4 Follower 경로 추종 단독 시험
+
+Follower 기본 launch에는 Leader `/plan` 변환과 Follower 경로 생성기가 포함된다. 경로가 들어와도
+자동으로 출발하지 않는다. 현재 실차 경로 추종은 Follower가 `IDLE`일 때 사람이 SetBool 서비스를
+호출해 시작하는 독립 시험 모드다. 이 서비스는 Leader의 상태, 물체 파지 여부, lift 완료를 승인하지
+않으므로 Leader가 다른 동작 중일 때는 사용하지 않는다. follower 단독 시험에서는 Leader motor 명령을
+건드리지 않는다.
+
+기존 임시 Follower bridge/guard launch가 실행 중이면 중복 하드웨어 연결을 피하도록 먼저 그 launch를
+정리한 뒤 기본 Follower launch를 실행한다. 같은 Follower에서 `follower_mission.launch.py`와
+`follower_solo_drive.launch.py` 또는 다른 bridge/guard를 동시에 실행하지 않는다.
+
+```bash
+# Follower Orin: 기존 Follower 단독 bridge launch가 종료된 상태에서
+ROS_DOMAIN_ID=42 ros2 launch cooperative_mission follower_mission.launch.py
+
+# 경로와 odometry 확인. frame transform이 필요하면 TF도 확인한다.
+ros2 topic echo --once /cooperation/follower_path_preview
+ros2 topic echo --once /follower/odom/raw
+ros2 topic echo /follower/path_tracking/status
+
+# 시험 시작 및 정지
+ros2 service call /follower/path_tracking/enable std_srvs/srv/SetBool "{data: true}"
+ros2 service call /follower/path_tracking/enable std_srvs/srv/SetBool "{data: false}"
+ros2 service call /follower/velocity_guard/enable std_srvs/srv/SetBool "{data: false}"
+```
+
+시작 전에 로봇 주변 경로를 비우고 비상정지 장치를 준비한다. 시작 서비스는 경로 신선도,
+odometry 신선도, 초기 경로 오차, selector/guard 서비스와 중복 명령 publisher를 검사한다.
+도착 또는 추종 오류 시 0 속도와 selector STOP을 요청한다. 마지막 guard-off 명령은 시험 종료 확인용이며,
+하드웨어 emergency stop을 대신하지 않는다. 전체 개발 상태와 아직 승인되지 않은 협동 자동 실행 조건은
+[협동 경로 추종 개발 진행상황](COOPERATIVE_PATH_TRACKING_PROGRESS.md)을 참고한다.
 
 모니터링:
 

@@ -37,11 +37,11 @@
     # Values copied from follower_apriltag_drive.launch.py; calibrate on the robot.
     gripper_open_raw: 950
     gripper_close_raw: 350
-    lift_raw: 300
-    lower_raw: 600
+    lift_raw: 20
+    lower_raw: 270
     approach_rx64_raw: -1
-    rx64_min: 260
-    rx64_max: 670
+    rx64_min: 20
+    rx64_max: 270
     grasp_settle_time: 2.0
     lift_duration: 3.5
     release_lower_time: 3.5
@@ -53,5 +53,19 @@
     leader_facing_opposite: true    # linear.x is negated (robots face each other)
     max_transport_linear: 0.10
     max_transport_angular: 0.30
+
+    # Standalone path following is explicitly started with
+    # /follower/path_tracking/enable; receiving /plan never moves the robot.
+    follower_path_topic: /cooperation/follower_path_preview
+    path_tracking_status_topic: /follower/path_tracking/status
+    path_tracking_lookahead_distance: 0.20
+    path_tracking_max_path_error: 0.20
+    path_tracking_goal_tolerance: 0.05
+    # Keep at or above the measured motor dead-zone threshold from solo tests.
+    path_tracking_max_linear_speed: 0.08
+    path_tracking_max_angular_speed: 0.30
+    path_tracking_lateral_acceleration: 0.08
+    path_tracking_odom_timeout: 0.35
+    path_tracking_start_timeout: 3.0
 
     action_timeout: 2.0

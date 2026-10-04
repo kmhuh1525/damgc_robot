@@ -49,6 +49,10 @@ def generate_launch_description() -> LaunchDescription:
         ),
         DeclareLaunchArgument("video_device", default_value="/dev/video0"),
         DeclareLaunchArgument("use_stm32_bridge", default_value="true", choices=["true", "false"]),
+        DeclareLaunchArgument(
+            "enable_leader_path_pipeline", default_value="true", choices=["true", "false"],
+            description="Convert Leader Nav2 /plan into a passive-hinge Follower path",
+        ),
         DeclareLaunchArgument("i2c_device", default_value="/dev/i2c-7"),
         DeclareLaunchArgument("i2c_address", default_value="66"),
         DeclareLaunchArgument("i2c_write_enabled", default_value="true", choices=["true", "false"]),
@@ -57,8 +61,8 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("rx64_speed", default_value="50"),
         DeclareLaunchArgument("gripper_open_raw", default_value="950"),
         DeclareLaunchArgument("gripper_close_raw", default_value="350"),
-        DeclareLaunchArgument("lift_raw", default_value="300"),
-        DeclareLaunchArgument("lower_raw", default_value="600"),
+        DeclareLaunchArgument("lift_raw", default_value="20"),
+        DeclareLaunchArgument("lower_raw", default_value="270"),
     ]
 
     selector = Node(
@@ -144,6 +148,26 @@ def generate_launch_description() -> LaunchDescription:
                 },
             ),
             stm32_bridge,
+            Node(
+                package="cooperative_mission",
+                executable="cooperative_leader_path_adapter_node",
+                name="cooperative_leader_path_adapter",
+                output="screen",
+                parameters=[PathJoinSubstitution(
+                    [share, "config", "cooperative_path_preview.yaml"]
+                )],
+                condition=IfCondition(config("enable_leader_path_pipeline")),
+            ),
+            Node(
+                package="cooperative_mission",
+                executable="cooperative_path_preview_node",
+                name="cooperative_path_preview",
+                output="screen",
+                parameters=[PathJoinSubstitution(
+                    [share, "config", "cooperative_path_preview.yaml"]
+                )],
+                condition=IfCondition(config("enable_leader_path_pipeline")),
+            ),
             _include(
                 "rescue_robot_tools",
                 "dynamixel_orin.launch.py",

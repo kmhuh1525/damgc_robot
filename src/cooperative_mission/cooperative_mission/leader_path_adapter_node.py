@@ -8,7 +8,9 @@ import rclpy
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import String
+from visualization_msgs.msg import Marker
 
 from .hinged_formation import (
     HingeGeometry,
@@ -26,6 +28,10 @@ class LeaderPathAdapterNode(Node):
         self.declare_parameter("object_path_topic", "/cooperation/object_path")
         self.declare_parameter(
             "status_topic", "/cooperation/leader_path_adapter/status"
+        )
+        self.declare_parameter("destination_marker_topic", "/cooperation/leader_destination")
+        self.declare_parameter(
+            "leader_visualization_path_topic", "/cooperation/leader_path_input"
         )
         self.declare_parameter("axle_to_hinge", 0.125)
         self.declare_parameter("hinge_to_contact", 0.1325)
@@ -49,11 +55,20 @@ class LeaderPathAdapterNode(Node):
         self._lateral_tolerance = float(
             self.get_parameter("lateral_tolerance").value
         )
+        latched_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self._object_pub = self.create_publisher(
-            Path, str(self.get_parameter("object_path_topic").value), 1
+            Path, str(self.get_parameter("object_path_topic").value), latched_qos
+        )
+        self._leader_path_pub = self.create_publisher(
+            Path,
+            str(self.get_parameter("leader_visualization_path_topic").value),
+            latched_qos,
         )
         self._status_pub = self.create_publisher(
             String, str(self.get_parameter("status_topic").value), 1
+        )
+        self._destination_pub = self.create_publisher(
+            Marker, str(self.get_parameter("destination_marker_topic").value), latched_qos
         )
         self.create_subscription(
             Path,
@@ -75,6 +90,7 @@ class LeaderPathAdapterNode(Node):
                 "PLAN_REJECTED reason=leader_path_needs_at_least_3_poses"
             )
             return
+        self._publish_leader_visualization(message)
         leader_poses = []
         for stamped in message.poses:
             pose = stamped.pose
@@ -100,6 +116,9 @@ class LeaderPathAdapterNode(Node):
             leader_direction = drive_direction(formation.leader)
             follower_direction = drive_direction(formation.follower)
         except ValueError as error:
+            empty_object_path = Path()
+            empty_object_path.header = message.header
+            self._object_pub.publish(empty_object_path)
             self._publish_status("PLAN_REJECTED reason=%s" % error)
             return
 
@@ -114,6 +133,7 @@ class LeaderPathAdapterNode(Node):
             stamped.pose.orientation.w = math.cos(0.5 * pose2d.yaw)
             output.poses.append(stamped)
         self._object_pub.publish(output)
+
         self._publish_status(
             "KINEMATIC_LEADER_PATH_CONVERTED poses=%d frame=%s "
             "max_curvature=%.4f 1/m max_hinge=%.2f deg "
@@ -129,6 +149,26 @@ class LeaderPathAdapterNode(Node):
                 follower_direction,
             )
         )
+
+    def _publish_leader_visualization(self, message: Path) -> None:
+        self._leader_path_pub.publish(message)
+        destination = Marker()
+        destination.header = message.poses[-1].header
+        if not destination.header.frame_id:
+            destination.header = message.header
+        destination.ns = "cooperative_destination"
+        destination.id = 0
+        destination.type = Marker.ARROW
+        destination.action = Marker.ADD
+        destination.pose = message.poses[-1].pose
+        destination.scale.x = 0.35
+        destination.scale.y = 0.08
+        destination.scale.z = 0.08
+        destination.color.r = 1.0
+        destination.color.g = 0.1
+        destination.color.b = 0.8
+        destination.color.a = 1.0
+        self._destination_pub.publish(destination)
 
     def _publish_status(self, text: str) -> None:
         message = String()

@@ -115,11 +115,25 @@ cd src/cooperative_mission && python3 -m pytest -q test
 [협동운반 경로 변환 알고리즘](../../docs/COOPERATIVE_TRANSPORT_PATH_ALGORITHM.md)을 참고한다.
 ROS 진단 노드는 `ros2 launch cooperative_mission cooperative_path_preview.launch.py`로
 실행할 수 있다. 이 노드는 `/cooperation/object_path`의 상자 중심 경로를 받아, passive yaw
-힌지 각도 제한과 차동구동 기구학을 적용한 두 로봇의 axle 경로를 생성한다. 현재 경로 출력은
-미리보기용이며 실차 구동에는 연결되지 않는다.
-경로 확인용 RViz 설정은 `rviz/cooperative_path_preview.rviz`이며, 실행 노드와 별도로
-`rviz2 -d "$(ros2 pkg prefix cooperative_mission)/share/cooperative_mission/rviz/cooperative_path_preview.rviz"`
-로 연다.
+힌지 각도 제한과 차동구동 기구학을 적용한 두 로봇의 axle 경로를 생성한다.
+기본 `follower_mission.launch.py`에서는 Leader `/plan` 변환과 Follower axle 경로 발행까지 자동으로
+켜진다. 경로 수신만으로 로봇이 움직이지 않는다. 실차 추종은 `/follower/path_tracking/enable` 서비스를
+명시적으로 켜야 하며, 현재는 Follower 미션 상태가 `IDLE`일 때 독립 단독 시험용으로 동작한다.
+실차 확인 내역과 협동 자동 실행 전 요구사항은
+[협동 경로 추종 개발 진행상황](../../docs/COOPERATIVE_PATH_TRACKING_PROGRESS.md)에 기록했다.
+리더와 팔로워의 협동 경로를 2D 지도에서 확인하려면 Follower 쪽에서 경로 파이프라인이 실행 중이어야
+한다. 전체 Follower 미션을 실행하지 않는 경로 미리보기 시험에서는
+`ros2 launch cooperative_mission cooperative_path_preview_from_leader.launch.py`를 실행한다.
+그다음 같은 ROS 도메인의 화면이 있는 컴퓨터에서 RViz를 연다.
+
+```bash
+rviz2 -d "$(ros2 pkg prefix cooperative_mission)/share/cooperative_mission/rviz/cooperative_path_preview.rviz"
+```
+
+주황색은 리더 Nav2 `/plan`, 하늘색은 계산된 팔로워 경로, 보라색 화살표는 리더 경로의 마지막 pose다.
+지도는 `/map`을 쓰며, 경로와 목표는 마지막 수신값을 RViz 실행 뒤에도 받을 수 있도록 transient-local로
+발행한다. 표시하려면 지도 토픽과 `map`부터 각 경로 frame까지의 TF가 있어야 한다. 현재 팔로워 경로는
+계산된 미리보기이며, 자동 경로 추종 승인과는 별개다.
 실제 Nav2 없이 3×4 m 시연 경로를 생성하려면
 `ros2 launch cooperative_mission cooperative_path_preview_demo.launch.py`를 사용한다. 이 launch는
 합성 상자 시작·목표 pose를 발행하고, 회전 안쪽 원형 장애물과 작업 경계를 고려해 힌지·차동구동 조건을
@@ -128,5 +142,10 @@ ROS 진단 노드는 `ros2 launch cooperative_mission cooperative_path_preview.l
 리더 Nav2 `/plan`에서 팔로워 경로를 미리 보려면
 `ros2 launch cooperative_mission cooperative_path_preview_from_leader.launch.py`를 사용한다.
 이 노드는 리더 axle 경로에서 상자 중심 경로를 역산한 뒤, 양쪽 로봇 경로와 전진·후진 방향을
-계산한다. Follower odometry가 들어오면 pure-pursuit 추종 속도도 계산하지만
-`/cooperation/follower/path_tracking/cmd_vel_preview`에만 발행하며 실차 명령과는 분리돼 있다.
+계산한다. 기본 Follower launch에서는 이 경로가 mission executor의 pure-pursuit 제어기로 전달된다.
+`ros2 service call /follower/path_tracking/enable std_srvs/srv/SetBool "{data: true}"`로 추종을
+시작하고, `/follower/path_tracking/status`를 확인한다. 중지할 때는 같은 서비스에 `data: false`를
+보낸다. 시작 전 selector/guard 서비스, 경로와 odometry freshness, 경로 시작 오차를 확인한다.
+도착, stale odometry, 경로 이탈, TF 오류에서는 0속도를 내고 selector를 `STOP`으로 돌린 뒤 guard를
+해제한다. 현재는 mission state가 `IDLE`일 때만 허용되는 Follower 단독 시험 경로이며, 협동 미션 중
+Leader 경로 실행을 승인하는 기능은 아직 연결되지 않았다.

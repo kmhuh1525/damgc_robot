@@ -8,6 +8,7 @@ import rclpy
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import String
 
 from .hinged_formation import (
@@ -55,11 +56,12 @@ class CooperativePathPreviewNode(Node):
         if not math.isfinite(self._lateral_tolerance) or self._lateral_tolerance < 0.0:
             raise ValueError("lateral_tolerance must be finite and non-negative")
 
+        latched_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self._leader_pub = self.create_publisher(
-            Path, str(self.get_parameter("leader_path_topic").value), 1
+            Path, str(self.get_parameter("leader_path_topic").value), latched_qos
         )
         self._follower_pub = self.create_publisher(
-            Path, str(self.get_parameter("follower_path_topic").value), 1
+            Path, str(self.get_parameter("follower_path_topic").value), latched_qos
         )
         self._status_pub = self.create_publisher(
             String, str(self.get_parameter("status_topic").value), 1
@@ -82,6 +84,10 @@ class CooperativePathPreviewNode(Node):
             self._publish_status("HINGE_GEOMETRY_NOT_CONFIGURED")
             return
         if not message.poses:
+            cleared = Path()
+            cleared.header = message.header
+            self._leader_pub.publish(cleared)
+            self._follower_pub.publish(cleared)
             self._publish_status("EMPTY_OBJECT_PATH")
             return
         if not message.header.frame_id:
