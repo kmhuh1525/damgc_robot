@@ -159,6 +159,7 @@ def leader_path_to_object_path(
     curvature_margin: float = 0.8,
     lateral_tolerance: float = 0.01,
     iterations: int = 16,
+    validate_curvature: bool = True,
 ) -> Tuple[Tuple[Pose2D, ...], "FormationPath"]:
     """Invert a leader axle path into the shared object path.
 
@@ -212,6 +213,7 @@ def leader_path_to_object_path(
         geometry,
         curvature_margin=curvature_margin,
         lateral_tolerance=lateral_tolerance,
+        validate_curvature=validate_curvature,
     )
     max_position_error = max(
         math.hypot(actual.x - expected.x, actual.y - expected.y)
@@ -270,6 +272,7 @@ def object_path_to_robot_paths(
     *,
     curvature_margin: float = 0.8,
     lateral_tolerance: float = 0.01,
+    validate_curvature: bool = True,
 ) -> FormationPath:
     """Convert an object-center path into both axle paths with passive hinge angles.
 
@@ -285,7 +288,7 @@ def object_path_to_robot_paths(
     curvatures = path_curvatures(object_path)
     max_curvature = max(abs(value) for value in curvatures)
     limit = geometry.curvature_limit(curvature_margin)
-    if max_curvature > limit + 1e-6:
+    if validate_curvature and max_curvature > limit + 1e-6:
         raise ValueError(
             "path curvature %.4f 1/m exceeds cooperative limit %.4f 1/m"
             % (max_curvature, limit)
@@ -301,7 +304,7 @@ def object_path_to_robot_paths(
     follower_hinge_angles = tuple(-angle for angle in leader_hinge_angles)
     allowed_hinge = geometry.hinge_limit * curvature_margin
     max_hinge = max(abs(angle) for angle in leader_hinge_angles)
-    if max_hinge > allowed_hinge + 1e-5:
+    if validate_curvature and max_hinge > allowed_hinge + 1e-5:
         raise ValueError(
             "required passive hinge angle %.2f deg exceeds reserved limit %.2f deg"
             % (
@@ -313,7 +316,7 @@ def object_path_to_robot_paths(
     for obj, q, q_follower in zip(
         object_path, leader_hinge_angles, follower_hinge_angles
     ):
-        if abs(q) > allowed_hinge + 1e-5:
+        if validate_curvature and abs(q) > allowed_hinge + 1e-5:
             raise ValueError("required passive hinge angle exceeds reserved limit")
         c = math.cos(obj.yaw)
         s = math.sin(obj.yaw)

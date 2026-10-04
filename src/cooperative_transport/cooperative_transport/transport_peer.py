@@ -58,6 +58,8 @@ class TransportPeer(Node):
         self.leader = self.role == 'leader'
         self.declare_parameter('motion_enabled', False)
         self.motion_enabled = bool(self.get_parameter('motion_enabled').value)
+        self.declare_parameter('validate_curvature', True)
+        self.validate_curvature = bool(self.get_parameter('validate_curvature').value)
         defaults = {'odom_topic': '/leader/odometry/local' if self.leader else '/follower/odom/raw',
                     'command_topic': '/leader/cooperation/cmd_vel' if self.leader else '/follower/mission/cmd_vel',
                     'axle_to_hinge': .125, 'hinge_to_contact': .1325,
@@ -312,8 +314,9 @@ class TransportPeer(Node):
                 raise ValueError('path does not begin at current leader pose/heading')
             if any(math.hypot(b.x-a.x,b.y-a.y) > .08 for a,b in zip(points,points[1:])):
                 raise ValueError('path spacing exceeds 8cm')
-            obj, formation = leader_path_to_object_path(points, self.geometry, lateral_tolerance=.01)
-            if abs(formation.leader_hinge_angles[0]) > math.radians(2):
+            obj, formation = leader_path_to_object_path(points, self.geometry, lateral_tolerance=.01,
+                                                       validate_curvature=self.validate_curvature)
+            if self.validate_curvature and abs(formation.leader_hinge_angles[0]) > math.radians(2):
                 raise ValueError('path must begin with neutral hinges; start with straight section')
             for path in (formation.leader, formation.follower):
                 if drive_direction(path) not in ('FORWARD','REVERSE'):
@@ -514,7 +517,8 @@ class TransportPeer(Node):
         leader_path = tuple(Pose2D(*map(float,xyz)) for xyz in body['leader'])
         if not 3 <= len(leader_path) <= 4000:
             raise ValueError('invalid path size')
-        _, formation = leader_path_to_object_path(leader_path, self.geometry, lateral_tolerance=.01)
+        _, formation = leader_path_to_object_path(leader_path, self.geometry, lateral_tolerance=.01,
+                                                 validate_curvature=self.validate_curvature)
         path = tuple(Pose2D(*map(float,xyz)) for xyz in body['follower'])
         if len(path) != len(formation.follower) or any(math.hypot(a.x-b.x,a.y-b.y) > .005 or abs(normalize_angle(a.yaw-b.yaw)) > .01 for a,b in zip(path,formation.follower)):
             raise ValueError('follower path disagrees with independent formation check')
@@ -630,7 +634,7 @@ class TransportPeer(Node):
                         command.linear.x = result.command.linear_x*factor
                         command.angular.z = result.command.angular_z*factor
                     # Pure pursuit must not demand a turn tighter than the hinges.
-                    if abs(command.linear.x) > 1e-5 and abs(command.angular.z/command.linear.x) > self.geometry.curvature_limit(.8)*1.1:
+                    if self.validate_curvature and abs(command.linear.x) > 1e-5 and abs(command.angular.z/command.linear.x) > self.geometry.curvature_limit(.8)*1.1:
                         raise ValueError('tracking command exceeds cooperative turn limit')
         except (ValueError, TypeError) as error:
             self.stop(str(error))

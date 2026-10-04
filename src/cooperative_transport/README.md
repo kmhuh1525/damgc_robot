@@ -72,6 +72,16 @@ For a later drive run, explicitly add BOTH `motion_enabled:=true` and
 `i2c_write_enabled:=true` on the follower and enable motion on the leader.
 The standalone `transport_peer` executable also defaults to motion disabled.
 
+For the temporary no-drive inspection requested on 2026-10-04, add
+`validate_curvature:=false` to BOTH peers' launch commands. This skips curvature
+and hinge-angle limit rejection (including initial hinge-angle and tracking
+curvature limits), while retaining the same path calculation, independent hash/
+geometry checks, lateral-motion and round-trip checks, and stop gates.
+The default remains `true`; changing this startup option requires restarting
+the affected peer. The follower cannot bypass a rejection that happens first
+on the leader. The current follower preparation run keeps motion and I2C writes
+disabled.
+
 This follower launch includes ONLY selector, velocity guard, STM32 drive/
 odometry bridge and peer. The selector starts STOP and guard disabled.
 If those drive nodes already run with the mission cmd_vel remap, use

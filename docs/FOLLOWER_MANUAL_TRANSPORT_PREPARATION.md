@@ -64,6 +64,11 @@ READY 후 움직이거나 조립을 바꾸면 새 준비와 경로가 필요하�
 
 ## 검증 명령
 
+추가 임시 변경: 곡률 검증 생략은 양쪽 peer에 `validate_curvature:=false`를 명시한다.
+곡률·힌지 각도 한계 검사만 생략하고, 경로 계산과 횡이동·round-trip·정렬·해시 검사는
+유지한다. 기본값은 true다. 현재 실기 Follower는 이 옵션을 false로 재기동하며
+`motion_enabled=false`, `i2c_write_enabled=false`를 유지한다.
+
 ```bash
 source /opt/ros/humble/setup.bash
 source install/setup.bash

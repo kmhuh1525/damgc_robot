@@ -34,6 +34,7 @@ def start(context):
                          'i2c_write_enabled':LaunchConfiguration('i2c_write_enabled')})]))
     actions.append(Node(package='cooperative_transport',executable='transport_peer',
                         namespace=role, output='screen', parameters=[{'role':role, 'command_topic':command,
+                        'validate_curvature':ParameterValue(LaunchConfiguration('validate_curvature'), value_type=bool),
                         'motion_enabled':ParameterValue(LaunchConfiguration('motion_enabled'), value_type=bool)}]))
     return actions
 
@@ -45,5 +46,6 @@ def generate_launch_description():
         DeclareLaunchArgument('use_stm32_bridge',default_value='true',choices=['true','false']),
         DeclareLaunchArgument('i2c_write_enabled',default_value='false',choices=['true','false']),
         DeclareLaunchArgument('motion_enabled',default_value='false',choices=['true','false']),
+        DeclareLaunchArgument('validate_curvature',default_value='true',choices=['true','false']),
         DeclareLaunchArgument('i2c_device',default_value='/dev/i2c-7'),
         DeclareLaunchArgument('i2c_address',default_value='66'), OpaqueFunction(function=start)])
