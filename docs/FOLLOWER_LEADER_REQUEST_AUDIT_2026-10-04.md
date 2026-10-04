@@ -47,14 +47,14 @@
    `enable_nav2_goal_selection` 파라미터가 현재 공용 Leader selector에는 없다.
    Follower selector의 COOPERATION 지원과는 별개다. Leader 미반영 상태에서는
    PREPARE/START 성공을 전제로 Follower 완료라고 보고하면 안 된다.
-3. **그리퍼 문서의 과거 값:** Leader 그리퍼 가이드의 Follower 부분은 RX-64
-   `260..670`, LIFT `300`을 적고 있다. 현재 Follower 드라이버 프로필·launch·mission
-   설정은 `20..270`, LIFT `20`, LOWER `270`이다. 실기 명령에는 현재 Follower
-   설정을 사용하고, 수동 파지 peer에는 그리퍼 명령을 연결하지 않는다.
+3. **그리퍼 값 문서 정합성 수정 완료:** Leader 그리퍼 가이드의 Follower 부분을 현재
+   드라이버 프로필·launch·mission 설정에 맞춰 RX-64 `20..270`, LIFT `20`,
+   LOWER `270`으로 수정했다. RX-28 ID `1`, OPEN `950`, CLOSE `350`, RX-64 ID
+   `50`, Moving Speed `50`을 사용한다. 수동 파지 peer에는 그리퍼 명령을 연결하지 않는다.
 4. **코드 공유 상태:** 새 `src/cooperative_transport`는 확인 시점에 untracked다.
    이 문서가 GitHub에 올라가도 새 peer 코드가 배포됐다는 뜻은 아니다.
 5. **기존 인계 메모 보완:** [Leader 인계 메모](COOPERATIVE_TRANSPORT_LEADER_HANDOFF.md)의
-   mapping/control 설명은 위 중계가 필요하다는 의미로 읽어야 한다. peer의 실제
+   mapping/control 설명도 실제 발행·구독 토픽과 중계 요구에 맞춰 수정했다. peer의
    제어 입력은 `/cooperation/transport/control`이다.
 
 Follower의 기존 단독 경로 생성/추종 결과는

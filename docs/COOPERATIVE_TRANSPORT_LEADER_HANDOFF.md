@@ -35,7 +35,7 @@ Peer packet의 body에는 frame, 기하 파라미터, Leader/Follower 차축 pos
 
 1. **Command selector 소유권:** Leader peer는 기본적으로 `/leader/cooperation/cmd_vel`에 명령을 발행하고 `source_mode=COOPERATION`을 요청한다. 현재 공용 Leader selector는 `STOP/TELEOP/APPROACH/NAV2/MISSION`만 받으며 이 입력을 구독하지 않는다. selector에 새 안전 source를 추가하거나, velocity guard를 통과하는 기존 source로 경로를 바꾸고 peer·launch·문서를 함께 수정한다. selector를 우회해 motor topic에 직접 연결하지 않는다.
 2. **Nav2 목표 선택 gate:** 현재 peer 초안은 `/leader/command_selector/set_parameters`에서 `enable_nav2_goal_selection=false`를 설정하려 한다. 이 파라미터는 현재 Leader selector에 선언되어 있지 않다. 실제 목표 선택을 소유하는 노드/키보드에 gate를 추가하거나 이 호출을 제거하고, 새 목표의 action status와 `/plan` timestamp로 오래된 계획이 선택되지 않도록 한다.
-3. **B/N/중지 요청 전달:** peer 초안은 `/leader/mapping/control`의 `COOP_PREPARE`, `COOP_START`, `COOP_ABORT`를 받는다. 별도 `transport_keys`는 이 토픽에 발행한다. Leader bringup/키보드가 이 요청을 peer에 전달하고, 일반 teleop·다른 임무 키가 들어오면 협동 세션을 취소해야 한다.
+3. **B/N/중지 요청 전달:** 별도 `transport_keys`는 `/leader/mapping/control`에 `COOP_PREPARE`, `COOP_START`, `COOP_ABORT`를 발행한다. peer 초안의 실제 입력은 `/cooperation/transport/control`이며 값은 `PREPARE`, `START`, `ABORT`다. Leader bringup/키보드가 두 계약 사이의 요청을 변환해 전달하고, 일반 teleop·다른 임무 키가 들어오면 협동 세션을 취소해야 한다.
 4. **새 Nav2 계획 판별:** PREPARE 이후 새 NavigateToPose goal을 확인하고 그 goal에 해당하는 `/plan`만 채택한다. `/navigate_to_pose/_action/status`와 plan stamp를 사용할 경우 clock domain, stamp 비교, 재계획/취소 동작을 확인한다.
 5. **frame 및 시작 정렬:** `/plan.header.frame_id`는 Leader odometry frame과 일치해야 한다. 현재 초안 검사는 시작 위치 오차 5 cm, 방향 오차 3°, 인접 pose 간격 8 cm 이하, pose 3–4000개를 요구한다. Nav2 설정 변경으로 조건이 달라지면 한쪽만 완화하지 말고 Follower 검증과 함께 갱신한다.
 6. **Follower-feasibility 거부:** 힌지 곡률, 차축 비측방 이동, 일정한 전진/후진 방향, 작업 공간/costmap 검사를 통과하지 못하면 계획을 폐기하고 정지 상태를 유지한다. 현재 경로 변환기는 거부 사유를 반환할 뿐 Nav2 대체 경로를 자동 탐색하지 않는다.

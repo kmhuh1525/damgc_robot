@@ -44,10 +44,11 @@
 | `stabilizing_tag_loss_grace_sec` | `0.30 s` | STABILIZING tag-loss grace |
 | `final_approach_tag_loss_grace_sec` | `0.30 s` | FINAL_APPROACH tag-loss grace |
 | RX-28 | ID `1`, raw `1..1021` | Follower gripper |
-| RX-64 | ID `50`, raw `260..670` | Follower lift |
+| RX-64 | ID `50`, raw `20..270` | Follower lift |
 | OPEN | RX-28 raw `950` | Follower 기본 OPEN |
 | CLOSE | RX-28 raw `350` | Follower 기본 CLOSE |
-| LIFT | RX-64 raw `300` | Follower 설정값 |
+| LIFT | RX-64 raw `20` | Follower 들어올림 위치 |
+| LOWER | RX-64 raw `270` | Follower 내려놓기 위치 |
 
 Follower의 authoritative alignment topic은
 `/follower/base_alignment/state`이며 detection topic은
@@ -60,12 +61,12 @@ Follower의 authoritative alignment topic은
   -> /follower/base_alignment/state=ALIGNED
   -> RX-28 CLOSE 350
   -> close_wait(3.0 s)
-  -> RX-64 LIFT 300
+  -> RX-64 LIFT 20
   -> DONE
 ```
 
 Follower launch에서는 Follower의 검증된 설정값으로 `lift_enabled`를 `true`로
-두어 raw 300 lift까지 자동 실행한다. lift를 제외한 시험이 필요하면 다음처럼
+두어 raw 20 lift까지 자동 실행한다. lift를 제외한 시험이 필요하면 다음처럼
 명시적으로 비활성화한다.
 
 ```bash
