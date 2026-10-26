@@ -1,5 +1,7 @@
 # 다중 로봇 재난 탐색·구호물품 운반 ROS 2 워크스페이스
 
+> **2026-10-27 최신 팔로워 시연:** [자동 인식·접근·그리퍼 집기 실기 인계](docs/FOLLOWER_GRIPPER_DEMO_2026-10-27.md). 리프트 제외, 그리퍼 속도40, 시작 서비스 한 번으로 집기까지 검증.
+
 `damgc_robot`은 소형 로봇 2대로 재난 환경을 탐색하고, 생존자 위치를 찾은 뒤
 구호물품을 단독 또는 협동 운반하기 위한 ROS 2 Humble 워크스페이스입니다.
 
@@ -21,7 +23,7 @@
   통한 `/leader/cmd_vel` software 경로가 구현되어 있다.
 - 리더 그리퍼: `leader_apriltag_drive.launch.py`가 Dynamixel node와 gripper sequence를
   함께 실행한다. 기본값은 `gripper_enabled=true`, RX-28 open `1000`, close `480`,
-  RX-64 lift `300`, speed `50`, `lift_enabled=true`이며 post-align odometry advance도
+  RX-64 lift `300`, speed `10`, `lift_enabled=true`이며 post-align odometry advance도
   활성화되어 있다. RX-64 raw `500→300` 이동은 hardware로 확인했지만 전체 물품 파지·운반
   성공은 아직 완료 조건으로 검증하지 않았다.
 - 팔로워: USB 카메라, AprilTag 검출, 기존 camera-frame 상태, exact-stamp TF2 기반
@@ -410,13 +412,13 @@ ros2 launch follower_control selected_velocity_guard.launch.py
 
 AprilTag 접근 source를 사용할 때는 selector를 명시적으로 `APPROACH`로 전환한 뒤 controller와
 guard를 각각 enable합니다. 기존 cooperation command는 `/follower/cmd_vel` 입력으로 유지되며
-AprilTag controller가 이 토픽을 직접 publish하지 않습니다. 현재 base/controller target
-`0.25 m`는 Leader와 맞춘 software-validation 값이지 실제 grasp 거리 확정값은 아닙니다.
+AprilTag controller가 이 토픽을 직접 publish하지 않습니다. 현재 단독 시연은 카메라 거리 `0.20 m`, base 전방 목표 `0.242 m`를 사용합니다.
+통합 시연에서는 시작 서비스가 controller·selector·guard를 관리합니다.
 
 전체 topic ownership, enable 순서, 파라미터와 자동시험 결과는
 [Follower base-link velocity pipeline 검증 가이드](src/follower/follower_supply_perception/docs/FOLLOWER_BASE_LINK_VELOCITY_PIPELINE_VALIDATION_GUIDE.md)를
-참고합니다. Follower 실카메라 RIGHT/TARGET/HIDDEN 시나리오는 아직 `NOT VERIFIED`이며
-사용자가 직접 확인해야 합니다.
+참고합니다. 과거 RIGHT/TARGET/HIDDEN 전체 시나리오와 이번 자동 집기 실기 결과의
+확인 범위는 구분하며, 최신 결과는 상단 인계 문서를 따릅니다.
 
 상세 토픽과 상태 정의는
 [리더·팔로워 구조](docs/LEADER_FOLLOWER_ARCHITECTURE.md)에서 확인할 수 있습니다.

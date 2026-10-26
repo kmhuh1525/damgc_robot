@@ -26,8 +26,8 @@ def test_follower_controller_and_base_state_targets_match() -> None:
     )
     controller_target = yaml_scalar(controller_config, "target_forward")
     perception_target = yaml_scalar(perception_config, "base_target_forward")
-    assert controller_target == pytest.approx(0.25)
-    assert perception_target == pytest.approx(0.25)
+    assert controller_target == pytest.approx(0.242)
+    assert perception_target == pytest.approx(0.242)
     assert controller_target == perception_target
 
 

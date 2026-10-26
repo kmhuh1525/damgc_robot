@@ -75,19 +75,19 @@ def test_integrated_launch_reuses_exactly_one_selected_guard() -> None:
 
 def test_integrated_startup_overrides_are_explicit() -> None:
     source = _source(DRIVE_LAUNCH)
-    assert '{"enabled_on_startup": "true"}' in source
-    assert '{"source_mode": "APPROACH"}' in source
+    assert '{"enabled_on_startup": "false"}' in source
+    assert '{"source_mode": "STOP"}' in source
     assert '{"guard_enabled_on_startup": "false"}' in source
 
 
 def test_integrated_gripper_uses_follower_profile_and_alignment_values() -> None:
     source = _source(DRIVE_LAUNCH)
     assert 'DeclareLaunchArgument(\n            "gripper_enabled"' in source
-    assert 'default_value="950"' in source
-    assert 'default_value="350"' in source
-    assert '"rx64_speed",\n            default_value="50"' in source
-    assert '"lift_raw",\n            default_value="20"' in source
-    assert '"lift_enabled",\n            default_value="true"' in source
+    assert 'default_value="1000"' in source
+    assert 'default_value="331"' in source
+    assert '"rx64_speed",\n            default_value="10"' in source
+    assert '"lift_raw",\n            default_value="45"' in source
+    assert '"lift_enabled",\n            default_value="false"' in source
     assert '"robot": "follower"' in source
     assert source.count('"robot": "follower"') == 2
     assert '"startup_pose_enabled": "false"' in source
@@ -190,8 +190,8 @@ def test_atomic_command_and_blind_default_contracts() -> None:
     assert "blind_final_approach_enabled: false" in config
     assert "aligned_confirm_samples: 3" in config
     assert "base_stable_time: 0.30" in config
-    assert "stabilizing_tag_loss_grace_sec: 0.30" in config
-    assert "final_approach_tag_loss_grace_sec: 0.30" in config
+    assert "stabilizing_tag_loss_grace_sec: 0.60" in config
+    assert "final_approach_tag_loss_grace_sec: 0.60" in config
     assert message.splitlines() == [
         "std_msgs/Header header",
         "geometry_msgs/Pose target_pose",

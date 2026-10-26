@@ -34,18 +34,18 @@
     approach_timeout: 150.0
     aligned_hold_time: 0.2
 
-    # Values copied from follower_apriltag_drive.launch.py; calibrate on the robot.
-    gripper_open_raw: 950
-    gripper_close_raw: 350
-    lift_raw: 20
-    lower_raw: 270
+    # Physical follower endpoints confirmed on 2026-10-26.
+    gripper_open_raw: 1000
+    gripper_close_raw: 331
+    lift_raw: 45
+    lower_raw: 286
     approach_rx64_raw: -1
-    rx64_min: 20
-    rx64_max: 270
-    grasp_settle_time: 2.0
-    lift_duration: 3.5
-    release_lower_time: 3.5
-    release_open_settle: 1.0
+    rx64_min: 45
+    rx64_max: 286
+    grasp_settle_time: 33.0
+    lift_duration: 12.0
+    release_lower_time: 12.0
+    release_open_settle: 33.0
 
     # --- Step 5: follow the Leader common velocity ---------------------------
     leader_timeout: 1.0             # /mission/state heartbeat while moving

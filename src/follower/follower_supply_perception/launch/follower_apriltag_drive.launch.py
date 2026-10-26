@@ -50,29 +50,39 @@ def generate_launch_description() -> LaunchDescription:
         ),
         DeclareLaunchArgument(
             "gripper_open_raw",
-            default_value="950",
+            default_value="1000",
             description="Follower RX-28 OPEN raw goal",
         ),
         DeclareLaunchArgument(
             "gripper_close_raw",
-            default_value="350",
+            default_value="331",
             description="Follower RX-28 CLOSE raw goal",
         ),
         DeclareLaunchArgument(
+            "gripper_close_wait",
+            default_value="9.0",
+            description="Wait for slow RX-28 close before lifting (seconds)",
+        ),
+        DeclareLaunchArgument(
             "rx64_speed",
-            default_value="50",
+            default_value="10",
             description="Follower RX-64 Moving Speed raw value",
         ),
         DeclareLaunchArgument(
+            "rx28_speed",
+            default_value="40",
+            description="Follower RX-28 Moving Speed raw value",
+        ),
+        DeclareLaunchArgument(
             "lift_enabled",
-            default_value="true",
+            default_value="false",
             choices=["true", "false"],
             description="Enable automatic Follower RX-64 lift after close",
         ),
         DeclareLaunchArgument(
             "lift_raw",
-            default_value="20",
-            description="Follower RX-64 lift raw goal (valid range 20..270; 20=raised, 270=lowered)",
+            default_value="45",
+            description="Follower RX-64 lift raw goal (valid range 45..286; 45=raised, 286=lowered)",
         ),
         DeclareLaunchArgument(
             "use_stm32_bridge",
@@ -123,8 +133,8 @@ def generate_launch_description() -> LaunchDescription:
             LogInfo(
                 msg=(
                     "Follower AprilTag drive startup safety: approach controller "
-                    "ENABLED, command selector APPROACH, velocity guard DISABLED. "
-                    "Call /follower/velocity_guard/enable with data=true to drive."
+                    "DISABLED, command selector STOP, velocity guard DISABLED. "
+                    "Call /follower/grasp/start to approach and grasp once."
                 )
             ),
             _include(
@@ -134,12 +144,12 @@ def generate_launch_description() -> LaunchDescription:
             _include(
                 "follower_approach_control",
                 "approach_controller.launch.py",
-                {"enabled_on_startup": "true"},
+                {"enabled_on_startup": "false"},
             ),
             _include(
                 "follower_command_selector",
                 "command_selector.launch.py",
-                {"source_mode": "APPROACH"},
+                {"source_mode": "STOP"},
             ),
             _include(
                 "follower_control",
@@ -154,6 +164,8 @@ def generate_launch_description() -> LaunchDescription:
                     "robot": "follower",
                     "port": LaunchConfiguration("gripper_port"),
                     "rx64_speed": LaunchConfiguration("rx64_speed"),
+                    "rx28_speed": LaunchConfiguration("rx28_speed"),
+                    "lift_enabled": LaunchConfiguration("lift_enabled"),
                     "startup_pose_enabled": "false",
                     "startup_torque": "false",
                 },
@@ -164,6 +176,8 @@ def generate_launch_description() -> LaunchDescription:
                 "gripper_sequence.launch.py",
                 {
                     "enabled": "true",
+                    "task_mode": "true",
+                    "open_wait": "9.0",
                     "robot": "follower",
                     "node_namespace": "follower",
                     "detection_topic": "/follower/supply/detected",
@@ -172,6 +186,7 @@ def generate_launch_description() -> LaunchDescription:
                     "gripper_topic": "/follower/gripper/command",
                     "open_raw": LaunchConfiguration("gripper_open_raw"),
                     "close_raw": LaunchConfiguration("gripper_close_raw"),
+                    "close_wait": LaunchConfiguration("gripper_close_wait"),
                     "lift_enabled": LaunchConfiguration("lift_enabled"),
                     "lift_raw": LaunchConfiguration("lift_raw"),
                     "tag_lost_idle_enabled": "false",

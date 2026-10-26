@@ -99,7 +99,7 @@ def test_follower_rx64_speed_uses_follower_id_and_never_rx28(sdk_controller):
 
 @pytest.mark.parametrize(
     ("robot", "expected_range"),
-    [("leader", (260, 670)), ("follower", (20, 270))],
+    [("leader", (260, 670)), ("follower", (45, 286))],
 )
 def test_rx64_raw_range_matches_robot_profile(robot, expected_range):
     profile = module.get_profile(robot)

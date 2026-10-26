@@ -26,6 +26,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
        "console_scripts": [
+         "camera_pair_node = follower_supply_perception.camera_pair_node:main",
    	 "apriltag_approach_node = "
    	 "follower_supply_perception.apriltag_approach_node:main",
 	],

@@ -11,6 +11,10 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import Bool, Float64MultiArray, String
+from std_srvs.srv import SetBool, Trigger
+from geometry_msgs.msg import PoseStamped
+from rclpy.parameter import Parameter
+from rcl_interfaces.srv import SetParameters
 
 from dynamixel_orin import get_profile
 
@@ -36,6 +40,11 @@ class GripperSequenceNode(Node):
         self.declare_parameter("close_raw", 350)
         self.declare_parameter("close_wait", 3.0)
         self.declare_parameter("enabled", False)
+        self.declare_parameter("task_mode", False)
+        self.declare_parameter("open_wait", 17.0)
+        self.declare_parameter("task_timeout", 120.0)
+        self.declare_parameter("grasp_distance", 0.20)
+        self.declare_parameter("grasp_distance_tolerance", 0.02)
         self.declare_parameter("robot", "leader")
         self.declare_parameter("lift_enabled", False)
         self.declare_parameter("lift_raw", -1.0)
@@ -96,6 +105,25 @@ class GripperSequenceNode(Node):
         self._status_pub = self.create_publisher(String, "sequence/status", 10)
         self.create_subscription(Bool, detection_topic, self._detection_callback, 10)
         self.create_subscription(String, alignment_topic, self._alignment_callback, 10)
+        self._task_mode = bool(self.get_parameter("task_mode").value)
+        self._task_phase = "IDLE"
+        self._task_queue = []
+        self._task_future = None
+        self._task_next = ""
+        self._alignment_received = 0.0
+        self._aligned_samples = 0
+        if self._task_mode:
+            self._approach_client = self.create_client(SetBool, "approach/enable")
+            self._guard_client = self.create_client(SetBool, "velocity_guard/enable")
+            selector = self.get_namespace().rstrip("/") + "/command_selector"
+            self._selector_client = self.create_client(SetParameters, selector + "/set_parameters")
+            self._motor_ack = False
+            self.create_subscription(String, raw_topic.rsplit("/", 1)[0] + "/status", self._task_motor_status, 10)
+            self._distance_pose = None
+            self._distance_received = 0.0
+            self.create_subscription(PoseStamped, "supply/relative_pose", self._task_pose_callback, 10)
+            self.create_service(Trigger, "grasp/start", self._start_task)
+            self.create_service(Trigger, "grasp/cancel", self._cancel_task)
         self._timer = self.create_timer(0.05, self._on_timer)
 
         self._state = SequenceState.WAITING_FOR_TAG
@@ -152,6 +180,9 @@ class GripperSequenceNode(Node):
     def _detection_callback(self, message: Bool) -> None:
         if not self._enabled:
             return
+        if getattr(self, "_task_mode", False):
+            self._tag_detected = bool(message.data)
+            return
         detected = bool(message.data)
         was_detected = self._tag_detected
         self._tag_detected = detected
@@ -171,8 +202,14 @@ class GripperSequenceNode(Node):
 
     def _alignment_callback(self, message: String) -> None:
         self._alignment_state = message.data.strip().upper()
+        if getattr(self, "_task_mode", False):
+            self._alignment_received = self._now()
+            self._aligned_samples = self._aligned_samples + 1 if self._alignment_state == "ALIGNED" else 0
 
     def _on_timer(self) -> None:
+        if getattr(self, "_task_mode", False):
+            self._task_timer()
+            return
         if not self._enabled:
             return
 
@@ -213,6 +250,148 @@ class GripperSequenceNode(Node):
         ):
             self._state = SequenceState.WAITING_FOR_TAG
             self._publish_status("WAITING_FOR_TAG next cycle armed")
+
+
+    def _queue_task_controls(self, controls, next_phase):
+        self._task_queue = list(controls)
+        self._task_future = None
+        self._task_next = next_phase
+        self._task_phase = "CONTROLS"
+
+    def _stop_task_controls(self, next_phase):
+        controls = [("guard", False), ("selector", "STOP")]
+        if next_phase != "CLOSE":
+            controls.append(("approach", False))
+        self._queue_task_controls(controls, next_phase)
+
+    def _task_motor_status(self, message):
+        if self._task_phase in ("IDLE", "DONE", "CANCELLED", "FAULT"):
+            return
+        if message.data.startswith("ERROR"):
+            self._task_fault("motor: " + message.data)
+        elif self._task_phase in ("WAIT_OPEN", "WAIT_CLOSE"):
+            target = self._open_raw if self._task_phase == "WAIT_OPEN" else self._close_raw
+            if message.data.startswith("OK ") and ("rx28=%d " % target) in message.data:
+                self._motor_ack = True
+
+    def _task_pose_callback(self, message):
+        if self._distance_pose is None or message.header.stamp != self._distance_pose.header.stamp:
+            self._distance_received = self._now()
+        self._distance_pose = message
+
+    def _task_distance_ok(self, now):
+        pose = self._distance_pose
+        if pose is None or now - self._distance_received > 0.60:
+            return False
+        stamp = pose.header.stamp.sec + pose.header.stamp.nanosec / 1e9
+        target = float(self.get_parameter("grasp_distance").value)
+        tolerance = float(self.get_parameter("grasp_distance_tolerance").value)
+        return 0 <= now - stamp <= 2.0 and abs(pose.pose.position.z - target) <= tolerance
+
+    def _start_task(self, request, response):
+        if not self._enabled or self._task_phase not in ("IDLE", "DONE", "CANCELLED", "FAULT"):
+            response.message = "task disabled or already running"
+            return response
+        if not (self._approach_client.service_is_ready() and self._guard_client.service_is_ready() and self._selector_client.service_is_ready()):
+            response.message = "approach, guard or selector service unavailable"
+            return response
+        self._aligned_samples = 0
+        self._task_started = self._now()
+        self._stop_task_controls("OPEN")
+        response.success = True
+        response.message = "accepted: open -> approach -> stop -> grasp; lift disabled"
+        self._publish_status("STARTED gripper-only task")
+        return response
+
+    def _cancel_task(self, request, response):
+        self._stop_task_controls("CANCELLED")
+        response.success = True
+        response.message = "stopping base; gripper holds its last target"
+        return response
+
+    def _task_fault(self, reason):
+        # Send both stop requests immediately; do not let a failed parameter
+        # service prevent the independent velocity guard from stopping motion.
+        if self._guard_client.service_is_ready():
+            self._guard_client.call_async(SetBool.Request(data=False))
+        if self._approach_client.service_is_ready():
+            self._approach_client.call_async(SetBool.Request(data=False))
+        self._task_queue = []
+        self._task_future = None
+        self._task_phase = "FAULT"
+        self._publish_status("FAULT " + reason)
+
+    def _task_timer(self):
+        phase = self._task_phase
+        if phase in ("IDLE", "DONE", "CANCELLED", "FAULT"):
+            return
+        now = self._now()
+        if phase == "CONTROLS":
+            if self._task_future is not None:
+                if not self._task_future.done():
+                    if now > self._control_deadline:
+                        self._task_fault("control service timeout")
+                    return
+                try:
+                    result = self._task_future.result()
+                    okay = result is not None and (all(r.successful for r in result.results) if hasattr(result, "results") else result.success)
+                    if not okay:
+                        self._task_fault("control service rejected request")
+                        return
+                except Exception as exc:
+                    self._task_fault(str(exc))
+                    return
+                self._task_future = None
+            if self._task_queue:
+                kind, value = self._task_queue.pop(0)
+                if kind == "selector":
+                    self._task_future = self._selector_client.call_async(SetParameters.Request(parameters=[Parameter("source_mode", value=value).to_parameter_msg()]))
+                else:
+                    client = self._guard_client if kind == "guard" else self._approach_client
+                    self._task_future = client.call_async(SetBool.Request(data=value))
+                self._control_deadline = now + 8.0
+                return
+            self._task_phase = self._task_next
+            if self._task_phase == "APPROACHING":
+                self._publish_status("APPROACHING waiting for fresh alignment and 20cm distance")
+            if self._task_phase == "CANCELLED":
+                self._publish_status("CANCELLED base stopped")
+            return
+        if phase in ("WAIT_OPEN", "WAIT_CLOSE") and not self._motor_ack and now > self._motor_ack_deadline:
+            self._task_fault("motor command acknowledgment timeout")
+            return
+        if now - self._task_started > float(self.get_parameter("task_timeout").value):
+            self._task_fault("task timed out")
+            return
+        if phase == "OPEN":
+            self._motor_ack = False
+            self._motor_ack_deadline = now + 3.0
+            self._publish_raw(-1.0, float(self._open_raw), -1.0, -1.0, 1.0)
+            self._deadline = now + float(self.get_parameter("open_wait").value)
+            self._task_phase = "WAIT_OPEN"
+            self._publish_status("OPENING before approach")
+        elif phase == "WAIT_OPEN" and now >= self._deadline:
+            self._aligned_samples = 0
+            self._queue_task_controls([("selector", "APPROACH"), ("approach", True), ("guard", True)], "APPROACHING")
+        elif phase == "APPROACHING":
+            if self._aligned_samples >= 3 and now - self._alignment_received < 0.35 and self._tag_detected and self._task_distance_ok(now):
+                self._stop_task_controls("CLOSE")
+        elif phase == "CLOSE":
+            # All three stop requests completed before commanding the gripper.
+            if now - self._alignment_received > 0.35 or self._alignment_state != "ALIGNED" or not self._tag_detected or not self._task_distance_ok(now):
+                self._task_fault("alignment/distance lost before closing")
+                return
+            self._motor_ack = False
+            self._motor_ack_deadline = now + 3.0
+            self._publish_raw(-1.0, float(self._close_raw), -1.0, -1.0, 1.0)
+            self._deadline = now + self._close_wait
+            self._task_phase = "WAIT_CLOSE"
+            self._publish_status("CLOSING base stopped; lift disabled")
+        elif phase == "WAIT_CLOSE" and now >= self._deadline:
+            self._approach_client.call_async(SetBool.Request(data=False))
+            self._task_phase = "DONE"
+            self._state = SequenceState.DONE
+            self._publish_status("DONE gripper target sent and close wait elapsed; start required for next cycle")
 
 
 def main(args=None) -> None:

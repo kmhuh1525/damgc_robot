@@ -74,7 +74,7 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("gripper_enabled", default_value="true", choices=["true", "false"]),
         DeclareLaunchArgument("gripper_port", default_value="/dev/ttyUSB0"),
         DeclareLaunchArgument("gripper_baudrate", default_value="115200"),
-        DeclareLaunchArgument("rx64_speed", default_value="50"),
+        DeclareLaunchArgument("rx64_speed", default_value="10"),
         DeclareLaunchArgument("gripper_open_raw", default_value="1000"),
         DeclareLaunchArgument("gripper_close_raw", default_value="450"),
         DeclareLaunchArgument("lift_raw", default_value="300"),

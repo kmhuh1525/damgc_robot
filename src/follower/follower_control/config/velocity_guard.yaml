@@ -8,8 +8,8 @@
     # Existing Follower speed clamps are retained for cooperation compatibility.
     max_linear_speed: 0.25
     max_angular_speed: 0.8
-    max_linear_acceleration: 0.25
-    max_angular_acceleration: 0.8
+    max_linear_acceleration: 0.05
+    max_angular_acceleration: 0.25
     max_slew_dt: 0.10
     axis_epsilon: 1.0e-9
     allow_reverse: false

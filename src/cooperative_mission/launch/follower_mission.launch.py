@@ -58,11 +58,12 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("i2c_write_enabled", default_value="true", choices=["true", "false"]),
         DeclareLaunchArgument("gripper_enabled", default_value="true", choices=["true", "false"]),
         DeclareLaunchArgument("gripper_port", default_value="/dev/ttyUSB0"),
-        DeclareLaunchArgument("rx64_speed", default_value="50"),
-        DeclareLaunchArgument("gripper_open_raw", default_value="950"),
-        DeclareLaunchArgument("gripper_close_raw", default_value="350"),
-        DeclareLaunchArgument("lift_raw", default_value="20"),
-        DeclareLaunchArgument("lower_raw", default_value="270"),
+        DeclareLaunchArgument("rx64_speed", default_value="10"),
+        DeclareLaunchArgument("rx28_speed", default_value="10"),
+        DeclareLaunchArgument("gripper_open_raw", default_value="1000"),
+        DeclareLaunchArgument("gripper_close_raw", default_value="331"),
+        DeclareLaunchArgument("lift_raw", default_value="45"),
+        DeclareLaunchArgument("lower_raw", default_value="286"),
     ]
 
     selector = Node(
@@ -175,6 +176,7 @@ def generate_launch_description() -> LaunchDescription:
                     "robot": "follower",
                     "port": config("gripper_port"),
                     "rx64_speed": config("rx64_speed"),
+                    "rx28_speed": config("rx28_speed"),
                     "startup_pose_enabled": "false",
                     "startup_torque": "false",
                 },

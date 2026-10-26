@@ -23,8 +23,10 @@ PROFILES = {
         "rx28_id": 2, "rx28_min": 1, "rx28_max": 1021,
     },
     "follower": {
-        "rx64_id": 50, "rx64_min": 20, "rx64_max": 270,
-        "rx28_id": 1, "rx28_min": 1, "rx28_max": 1021,
+        # Physical endpoints confirmed on the follower hardware.
+        "rx64_id": 50, "rx64_min": 45, "rx64_max": 286,
+        "rx28_id": 1, "rx28_min": 278, "rx28_max": 1000,
+        "rx28_open": 1000, "rx28_close": 331,
     },
 }
 
@@ -93,13 +95,19 @@ class DynamixelOrin:
         self._check_result(operation, result, packet_error)
 
     def set_rx64_speed(self, speed: int):
+        self.set_moving_speed(self.profile["rx64_id"], speed)
+
+    def set_rx28_speed(self, speed: int):
+        self.set_moving_speed(self.profile["rx28_id"], speed)
+
+    def set_moving_speed(self, device_id: int, speed: int):
         if not 0 <= speed <= MAX_JOINT_MODE_SPEED:
             raise ValueError(
-                f"RX64 moving speed must be between 0 and {MAX_JOINT_MODE_SPEED}"
+                f"moving speed must be between 0 and {MAX_JOINT_MODE_SPEED}"
             )
-        operation = f"RX64 moving speed={speed}"
+        operation = f"{self._label(device_id)} moving speed={speed}"
         result, packet_error = self.packet_handler.write2ByteTxRx(
-            self.port_handler, self.profile["rx64_id"], MOVING_SPEED, speed
+            self.port_handler, device_id, MOVING_SPEED, speed
         )
         self._check_result(operation, result, packet_error)
 
@@ -110,6 +118,8 @@ def main():
     parser.add_argument("--robot", choices=sorted(PROFILES), default="leader")
     parser.add_argument("--rx64-raw", type=int, help="RX-64 raw goal position")
     parser.add_argument("--rx28-raw", type=int, help="RX-28 raw goal position")
+    parser.add_argument("--rx64-speed", type=int, default=10, help="RX-64 Moving Speed raw value")
+    parser.add_argument("--rx28-speed", type=int, default=40, help="RX-28 Moving Speed raw value")
     parser.add_argument("--torque", action="store_true", help="enable torque before moving")
     parser.add_argument("--no-torque", action="store_true", help="disable torque")
     args = parser.parse_args()
@@ -122,6 +132,8 @@ def main():
 
     controller = DynamixelOrin(args.port, profile)
     try:
+        controller.set_rx64_speed(args.rx64_speed)
+        controller.set_rx28_speed(args.rx28_speed)
         if args.no_torque:
             controller.set_torque(profile["rx64_id"], False)
             controller.set_torque(profile["rx28_id"], False)

@@ -181,6 +181,8 @@ class AprilTagApproachNode(Node):
         self.declare_parameter("angle_tolerance_deg", 5.0)
         self.declare_parameter("tag_timeout", 2.0)
         self.declare_parameter("tag_receipt_timeout", 0.35)
+        self.declare_parameter("observation_hold_time", 0.25)
+        self.declare_parameter("align_tag_normal", True)
         self.declare_parameter("stable_time", 0.8)
         self.declare_parameter("publish_rate", 20.0)
         self.declare_parameter("filter_window", 5)
@@ -231,6 +233,8 @@ class AprilTagApproachNode(Node):
         self._angle_tolerance_deg = float(value("angle_tolerance_deg"))
         self._tag_timeout = float(value("tag_timeout"))
         self._tag_receipt_timeout = float(value("tag_receipt_timeout"))
+        self._observation_hold_time = float(value("observation_hold_time"))
+        self._align_tag_normal = bool(value("align_tag_normal"))
         self._stable_time = float(value("stable_time"))
         self._publish_rate = float(value("publish_rate"))
         self._filter_window = int(value("filter_window"))
@@ -356,6 +360,8 @@ class AprilTagApproachNode(Node):
         self._base_thresholds().validate()
         if self._tag_timeout <= 0.0 or self._tag_receipt_timeout <= 0.0:
             raise ValueError("tag timeouts must be positive")
+        if not 0.0 < self._observation_hold_time <= self._tag_receipt_timeout:
+            raise ValueError("observation_hold_time must be positive and <= tag_receipt_timeout")
         if self._publish_rate <= 0.0 or self._filter_window < 1:
             raise ValueError("publish_rate and filter_window must be positive")
         if self._tf_lookup_timeout < 0.0:
@@ -421,12 +427,12 @@ class AprilTagApproachNode(Node):
             else:
                 self._publish_blind_cycle(ros_now, receipt_now)
                 return
-        if not is_new:
+        if not is_new and (sample_receipt is None or receipt_now - sample_receipt > getattr(self, "_observation_hold_time", 0.25)):
             if self._publish_final_approach_grace(receipt_now):
                 return
-            if self._last_logged_base_state == ApproachState.STABILIZING:
-                self._publish_lost(ros_now, receipt_now)
-                return
+            # A repeated TF is not a visual dropout. Preserve a fresh
+            # stabilizing sample; the state machine receives is_new=False
+            # and therefore cannot count it as another confirmation.
         if sample_receipt is None:
             self._publish_lost(ros_now, receipt_now)
             return
@@ -878,21 +884,27 @@ class AprilTagApproachNode(Node):
             metrics = compute_base_metrics(
                 base_pose.pose.position.x, base_pose.pose.position.y
             )
-            orientation = base_pose.pose.orientation
-            normal_x, normal_y = rotate_tag_z_to_base_xy(
-                (orientation.x, orientation.y, orientation.z, orientation.w)
-            )
-            normal_x, normal_y = select_robot_facing_normal(
-                base_pose.pose.position.x,
-                base_pose.pose.position.y,
-                normal_x,
-                normal_y,
-            )
-            normal_x, normal_y = self._normal_filter.add(
-                normal_x,
-                normal_y,
-                stamp.sec * 1_000_000_000 + stamp.nanosec,
-            )
+            if getattr(self, "_align_tag_normal", True):
+                orientation = base_pose.pose.orientation
+                normal_x, normal_y = rotate_tag_z_to_base_xy(
+                    (orientation.x, orientation.y, orientation.z, orientation.w)
+                )
+                normal_x, normal_y = select_robot_facing_normal(
+                    base_pose.pose.position.x,
+                    base_pose.pose.position.y,
+                    normal_x,
+                    normal_y,
+                )
+                normal_x, normal_y = self._normal_filter.add(
+                    normal_x,
+                    normal_y,
+                    stamp.sec * 1_000_000_000 + stamp.nanosec,
+                )
+            else:
+                # Keep both staging and final targets on the same center ray.
+                # A noisy tag-face yaw must not create a lateral detour.
+                normal_x = -base_pose.pose.position.x
+                normal_y = -base_pose.pose.position.y
             geometry = compute_target_geometry(
                 base_pose.pose.position.x,
                 base_pose.pose.position.y,

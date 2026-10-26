@@ -16,6 +16,7 @@ def generate_launch_description() -> LaunchDescription:
             namespace="/follower",
             name=node_name,
             arguments=list(transform.publisher_arguments()),
+            remappings=[("tf", "/tf"), ("tf_static", "/tf_static")],
             output="screen",
         )
         for node_name, transform in zip(node_names, FOLLOWER_CAMERA_TRANSFORMS)

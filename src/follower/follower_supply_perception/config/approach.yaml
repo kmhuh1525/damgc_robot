@@ -10,7 +10,9 @@
     target_tag_id: 0
     allowed_tag_ids: [0, 1, 2]
     selection_mode: priority
-    target_distance: 0.15
+    # Gripper-only demo: approach the center directly, not a tag-face-normal offset.
+    align_tag_normal: false
+    target_distance: 0.20
     distance_tolerance: 0.02
     lateral_tolerance: 0.02
     angle_tolerance_deg: 5.0
@@ -18,21 +20,24 @@
     # usb_cam source stamps can carry a fixed 0.31-0.79 s age offset. Keep
     # tag_timeout as a source-stamp sanity bound, and use local monotonic
     # receipt age below to detect an actual visual dropout.
-    tag_receipt_timeout: 0.35
+    tag_receipt_timeout: 0.60
+    # Hold the latest genuinely received observation between normal frames.
+    # Confirmation counts still advance only for a distinct image stamp.
+    observation_hold_time: 0.25
     stable_time: 0.8
     publish_rate: 20.0
     filter_window: 5
 
-    # Follower geometry baseline. Do not replace this 0.25 m target with the
-    # Leader robot's 0.20 m value during algorithm migration.
-    base_target_forward: 0.25
-    base_forward_tolerance: 0.04
-    base_lateral_tolerance: 0.04
+    # Camera target is 0.20 m; measured camera mount is 0.042 m ahead
+    # of base_link. Keep camera and base distances distinct.
+    base_target_forward: 0.242
+    base_forward_tolerance: 0.015
+    base_lateral_tolerance: 0.025
     base_bearing_tolerance_deg: 8.0
     base_stable_time: 0.30
     aligned_confirm_samples: 3
-    stabilizing_tag_loss_grace_sec: 0.30
-    final_approach_tag_loss_grace_sec: 0.30
+    stabilizing_tag_loss_grace_sec: 0.60
+    final_approach_tag_loss_grace_sec: 0.60
 
     # Hybrid center/normal alignment. The 0.35 m pre-align point preserves a
     # 0.10 m staging interval ahead of the Follower's 0.25 m final target.

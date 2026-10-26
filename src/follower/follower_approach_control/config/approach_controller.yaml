@@ -12,14 +12,14 @@
     # Deprecated no-op: atomic messages no longer require callback sync.
     sample_sync_tolerance: 0.10
     # Kept for existing launch/config compatibility. Perception owns the
-    # 0.25 m final target and publishes the active control error atomically.
-    target_forward: 0.25
+    # 0.242 m base-frame final target and publishes the active control error atomically.
+    target_forward: 0.242
     # Gains and raw limits remain conservative topic-validation values.
     linear_gain: 0.20
     angular_gain: 0.80
     lateral_gain: 0.50
-    max_raw_linear_speed: 0.05
-    max_raw_angular_speed: 0.20
+    max_raw_linear_speed: 0.04
+    max_raw_angular_speed: 0.15
     near_max_angular_speed: 0.10
     max_final_linear_speed: 0.02
     max_final_angular_speed: 0.06

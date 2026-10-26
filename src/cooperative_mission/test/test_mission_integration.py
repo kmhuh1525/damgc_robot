@@ -56,8 +56,8 @@ def test_leader_grasps_before_follower_moves() -> None:
     world = World()
     run_to_done(world)
     leader_close = next(t for t, v in world.L.gripper_log if v == (-1.0, 450.0, -1.0, 1.0))
-    follower_open = next(t for t, v in world.F.gripper_log if v[1] == 950.0)
-    follower_close = next(t for t, v in world.F.gripper_log if v == (-1.0, 350.0, -1.0, 1.0))
+    follower_open = next(t for t, v in world.F.gripper_log if v[1] == 1000.0)
+    follower_close = next(t for t, v in world.F.gripper_log if v == (-1.0, 331.0, -1.0, 1.0))
     assert leader_close < follower_open < follower_close
 
 
@@ -69,7 +69,7 @@ def test_lift_is_simultaneous_and_follower_never_late() -> None:
     # Leader lifts on the Follower acknowledgement: one link hop, never before.
     assert 0.0 <= offset <= 2 * 0.004 + 1e-9
     # Both lifts happen only after both grippers are closed.
-    follower_close = next(t for t, v in world.F.gripper_log if v[1] == 350.0)
+    follower_close = next(t for t, v in world.F.gripper_log if v[1] == 331.0)
     assert world.F.lift_times[0] > follower_close
 
 
@@ -200,12 +200,15 @@ def test_release_after_done_returns_both_to_idle_and_lowers_together() -> None:
     run_to_done(world)
     ok, message = world.leader.release(world.t)
     assert ok, message
-    assert world.run_until(lambda w: w.leader.state in (LeaderState.IDLE, LeaderState.FAULT), 30.0)
+    assert world.run_until(
+        lambda w: w.leader.state in (LeaderState.IDLE, LeaderState.FAULT),
+        FollowerMissionConfig().release_lower_time + FollowerMissionConfig().release_open_settle + 5.0,
+    )
     assert world.leader.state == LeaderState.IDLE, world.leader.detail
     world.settle(0.3)
     assert world.follower.state == FollowerState.IDLE
     lower_l = [t for t, v in world.L.gripper_log if v[0] == 600.0]
-    lower_f = [t for t, v in world.F.gripper_log if v[0] == 270.0]
+    lower_f = [t for t, v in world.F.gripper_log if v[0] == 286.0]
     assert lower_l and lower_f and 0.0 <= lower_l[0] - lower_f[0] <= 0.01
     # Mission can run again after release, even though both robots are still
     # latched ALIGNED at their grasp poses from the first run.
@@ -233,7 +236,7 @@ def test_command_retransmission_is_idempotent() -> None:
     run_to_done(world)
     assert len(world.received_seqs) > len(set(world.received_seqs))  # resends happened
     assert len(world.F.lift_times) == 1
-    assert len([1 for _, v in world.F.gripper_log if v[1] == 350.0]) == 1
+    assert len([1 for _, v in world.F.gripper_log if v[1] == 331.0]) == 1
 
 
 def test_config_validation_rejects_unsafe_transport() -> None:

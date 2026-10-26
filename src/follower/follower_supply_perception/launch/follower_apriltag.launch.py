@@ -91,16 +91,11 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     rectify = Node(
-        package="image_proc",
-        executable="rectify_node",
-        namespace="/follower/camera",
-        name="rectify_node",
+        package="follower_supply_perception",
+        executable="camera_pair_node",
+        namespace="/follower",
+        name="camera_pair",
         output="screen",
-        remappings=[
-            ("image", "image_raw"),
-            ("camera_info", "camera_info"),
-            ("image_rect", "image_rect"),
-        ],
     )
 
     apriltag = Node(
@@ -111,8 +106,10 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         parameters=[apriltag_config],
         remappings=[
-            ("image_rect", "/follower/camera/image_rect"),
-            ("camera_info", "/follower/camera/camera_info"),
+            # Rectified mono image and calibration have an identical source stamp.
+            ("image_rect", "/follower/tag_camera/image_rect"),
+            ("camera_info", "/follower/tag_camera/camera_info"),
+            ("tf", "/tf"),
         ],
     )
 

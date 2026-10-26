@@ -101,11 +101,11 @@ class LeaderMissionConfig:
             open_raw=1000, close_raw=450, lift_raw=300, lower_raw=600
         )
     )
-    grasp_settle_time: float = 2.0
-    lift_duration: float = 3.5
+    grasp_settle_time: float = 25.0
+    lift_duration: float = 14.0
     lift_ack_margin: float = 3.0
-    release_lower_time: float = 3.5
-    release_open_settle: float = 1.0
+    release_lower_time: float = 14.0
+    release_open_settle: float = 33.0
     # Follower coordination
     require_follower: bool = True
     follower_status_timeout: float = 1.0

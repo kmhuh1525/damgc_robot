@@ -450,3 +450,35 @@ def test_camera_lost_publishes_only_loss_outputs_and_base_lost() -> None:
     assert harness._tag_id_pub.messages[-1].data == -1
     assert harness._state_pub.messages[-1].data == ApproachState.TAG_LOST.value
     assert harness._base_state_pub.messages[-1].data == ApproachState.TAG_LOST.value
+
+
+@pytest.mark.parametrize("face_yaw", [-0.5, 0.0, 0.5])
+def test_center_approach_stays_straight_despite_tag_face_yaw(face_yaw):
+    from math import sin, cos
+    harness = base_harness(RecordingBuffer(identity_transform()))
+    harness._align_tag_normal = False
+    half = face_yaw / 2
+    c = sqrt(.5)
+    pose = make_pose(position=(.38, 0., 0.), quaternion=(-sin(half)*c, cos(half)*c, sin(half)*c, cos(half)*c))
+    AprilTagApproachNode._publish_base_outputs(harness, pose, 12.4, 12.5, True)
+    pre = harness._prealign_target_pub.messages[-1]
+    final = harness._final_target_pub.messages[-1]
+    assert pre.pose.position.y == pytest.approx(0.)
+    assert final.pose.position.y == pytest.approx(0.)
+    assert final.pose.orientation.z == pytest.approx(0.)
+    _, decision = harness._command_pub.messages[-1]
+    assert decision.control_y == pytest.approx(0.)
+    assert decision.state not in (ApproachState.FINE_ALIGN_LEFT, ApproachState.FINE_ALIGN_RIGHT)
+
+
+@pytest.mark.parametrize("lateral", [-.04, .04])
+def test_center_approach_staging_and_final_targets_share_same_bearing(lateral):
+    harness = base_harness(RecordingBuffer(identity_transform()))
+    harness._align_tag_normal = False
+    pose = make_pose(position=(.5, lateral, 0.), quaternion=(0., sqrt(.5), 0., sqrt(.5)))
+    AprilTagApproachNode._publish_base_outputs(harness, pose, 12.4, 12.5, True)
+    pre = harness._prealign_target_pub.messages[-1].pose.position
+    final = harness._final_target_pub.messages[-1].pose.position
+    bearing = atan2(lateral, .5)
+    assert atan2(pre.y, pre.x) == pytest.approx(bearing)
+    assert atan2(final.y, final.x) == pytest.approx(bearing)

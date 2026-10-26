@@ -33,6 +33,7 @@ def make_harness():
             "rx28_min": 1,
             "rx28_max": 1021,
         },
+        get_parameter=lambda _: SimpleNamespace(value=True),
         calls=calls,
         publish_status=statuses.append,
         statuses=statuses,
@@ -124,10 +125,10 @@ def test_disabled_startup_pose_and_torque_write_nothing():
 def test_rx64_speed_is_applied_without_torque_or_position_write():
     harness = make_harness()
 
-    DynamixelOrinNode._apply_rx64_speed(harness, 50)
+    DynamixelOrinNode._apply_rx64_speed(harness, 10)
 
-    assert harness.calls == [("rx64_speed", 50)]
-    assert harness.statuses == ["RX64_SPEED raw=50"]
+    assert harness.calls == [("rx64_speed", 10)]
+    assert harness.statuses == ["RX64_SPEED raw=10"]
 
 
 def test_leader_compatible_startup_pose_remains_enabled():
@@ -169,7 +170,7 @@ def test_shared_startup_defaults_remain_leader_compatible_and_typed():
     )
 
     assert 'DeclareLaunchArgument("robot", default_value="leader")' in source
-    assert 'DeclareLaunchArgument("rx64_speed", default_value="50")' in source
+    assert 'DeclareLaunchArgument("rx64_speed", default_value="10")' in source
     assert 'DeclareLaunchArgument("startup_torque", default_value="true")' in source
     assert (
         'DeclareLaunchArgument("startup_pose_enabled", default_value="true")'
@@ -182,5 +183,27 @@ def test_shared_startup_defaults_remain_leader_compatible_and_typed():
     node_source = (PACKAGE_ROOT / "scripts/dynamixel_orin_node.py").read_text(
         encoding="utf-8"
     )
-    assert 'self.declare_parameter("rx64_speed", 50)' in node_source
+    assert 'self.declare_parameter("rx64_speed", 10)' in node_source
     assert "self._apply_rx64_speed(rx64_speed)" in node_source
+
+
+def test_disabled_lift_ignores_raw_position_and_torque_enable():
+    harness = make_harness()
+    harness.get_parameter = lambda _: SimpleNamespace(value=False)
+    DynamixelOrinNode.command_callback(harness, Float64MultiArray(data=[45.0, -1.0, 1.0, -1.0]))
+    assert not harness.calls
+
+
+def test_disabled_lift_legacy_command_only_touches_gripper():
+    harness = make_harness()
+    harness.get_parameter = lambda _: SimpleNamespace(value=False)
+    DynamixelOrinNode.command_callback(harness, Float64MultiArray(data=[45.0, 331.0, 1.0]))
+    assert harness.calls == [("torque", 2, True), ("position", 2, 331, 1, 1021)]
+
+
+def test_disabled_lift_rejects_semantic_motion():
+    harness = make_harness()
+    harness.get_parameter = lambda _: SimpleNamespace(value=False)
+    DynamixelOrinNode.gripper_command_callback(harness, SimpleNamespace(data="rx64_high"))
+    assert not harness.calls
+    assert harness.statuses == ["IGNORED lift disabled"]

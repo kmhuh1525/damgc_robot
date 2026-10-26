@@ -419,7 +419,7 @@ def test_blind_age_does_not_expire_general_visual_tracking_when_disabled(
     assert not lost
 
 
-def test_duplicate_final_sample_enters_zero_hold_grace_immediately(
+def test_duplicate_final_sample_holds_latest_command_between_frames(
     monkeypatch,
 ) -> None:
     harness, published, lost, receipt_now = duplicate_timer_harness(
@@ -434,12 +434,13 @@ def test_duplicate_final_sample_enters_zero_hold_grace_immediately(
 
     AprilTagApproachNode._on_timer(harness)
 
-    assert grace_calls == [pytest.approx(10.1)]
-    assert not published
+    assert not grace_calls
+    assert len(published) == 1
+    assert published[0][-1] is False
     assert not lost
 
 
-def test_duplicate_stabilizing_sample_enters_state_machine_grace(
+def test_duplicate_stabilizing_sample_preserves_fresh_measurement(
     monkeypatch,
 ) -> None:
     harness, published, lost, receipt_now = duplicate_timer_harness(
@@ -450,8 +451,9 @@ def test_duplicate_stabilizing_sample_enters_state_machine_grace(
 
     AprilTagApproachNode._on_timer(harness)
 
-    assert not published
-    assert len(lost) == 1
+    assert len(published) == 1
+    assert published[0][-1] is False
+    assert not lost
 
 
 def test_blind_age_still_triggers_existing_handoff_path_when_enabled(
@@ -523,3 +525,22 @@ def test_approach_enable_event_resets_latched_session_state() -> None:
     assert not harness._final_approach_grace_eligible
     assert not harness._blind_active
     assert not harness._blind_completed
+
+
+def test_final_sample_stops_after_short_observation_hold(monkeypatch):
+    harness, published, lost, receipt_now = duplicate_timer_harness(blind_enabled=False, receipt_now=10.30)
+    calls = []
+    harness._last_logged_base_state = ApproachState.FINAL_APPROACH
+    harness._publish_final_approach_grace = lambda receipt: calls.append(receipt) or True
+    monkeypatch.setattr(node_module.time, "monotonic", lambda: receipt_now)
+    AprilTagApproachNode._on_timer(harness)
+    assert calls == [pytest.approx(10.30)]
+    assert not published
+
+
+def test_expired_observation_is_not_extended_by_duplicate_tf(monkeypatch):
+    harness, published, lost, receipt_now = duplicate_timer_harness(blind_enabled=False, receipt_now=10.50)
+    monkeypatch.setattr(node_module.time, "monotonic", lambda: receipt_now)
+    AprilTagApproachNode._on_timer(harness)
+    assert lost
+    assert not published

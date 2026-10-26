@@ -28,7 +28,9 @@ class DynamixelOrinNode(Node):
         self.declare_parameter("port", "/dev/ttyUSB0")
         self.declare_parameter("baudrate", 115200)
         self.declare_parameter("robot", "leader")
-        self.declare_parameter("rx64_speed", 50)
+        self.declare_parameter("rx64_speed", 10)
+        self.declare_parameter("rx28_speed", 40)
+        self.declare_parameter("lift_enabled", False)
         # Safe idle pose used immediately after the Dynamixel bus is opened.
         self.declare_parameter("startup_rx64_raw", 600)
         self.declare_parameter("startup_rx28_raw", 500)
@@ -40,6 +42,7 @@ class DynamixelOrinNode(Node):
         port = str(self.get_parameter("port").value)
         baudrate = int(self.get_parameter("baudrate").value)
         rx64_speed = int(self.get_parameter("rx64_speed").value)
+        rx28_speed = int(self.get_parameter("rx28_speed").value)
         startup_rx64 = int(self.get_parameter("startup_rx64_raw").value)
         startup_rx28 = int(self.get_parameter("startup_rx28_raw").value)
         startup_torque = bool(self.get_parameter("startup_torque").value)
@@ -50,10 +53,12 @@ class DynamixelOrinNode(Node):
 
         try:
             self.controller = DynamixelOrin(port, self.profile, baudrate)
-            self._apply_rx64_speed(rx64_speed)
+            if bool(self.get_parameter("lift_enabled").value):
+                self._apply_rx64_speed(rx64_speed)
+            self._apply_rx28_speed(rx28_speed)
             self.publish_status(
                 f"READY robot={robot} port={port} baudrate={baudrate} "
-                f"rx64_speed={rx64_speed}"
+                f"rx64_speed={rx64_speed} rx28_speed={rx28_speed}"
             )
             self._apply_startup_configuration(
                 startup_pose_enabled,
@@ -87,6 +92,11 @@ class DynamixelOrinNode(Node):
         self.controller.set_rx64_speed(rx64_speed)
         self.publish_status(f"RX64_SPEED raw={rx64_speed}")
 
+    def _apply_rx28_speed(self, rx28_speed: int) -> None:
+        """Configure RX-28 speed once without commanding torque or position."""
+        self.controller.set_rx28_speed(rx28_speed)
+        self.publish_status(f"RX28_SPEED raw={rx28_speed}")
+
     def _apply_startup_configuration(
         self,
         startup_pose_enabled: bool,
@@ -95,7 +105,7 @@ class DynamixelOrinNode(Node):
         startup_rx28: int,
     ) -> None:
         """Apply the optional startup torque and pose without implicit writes."""
-        if startup_pose_enabled and not (
+        if startup_pose_enabled and bool(self.get_parameter("lift_enabled").value) and not (
             self.profile["rx64_min"] <= startup_rx64 <= self.profile["rx64_max"]
             and self.profile["rx28_min"] <= startup_rx28 <= self.profile["rx28_max"]
         ):
@@ -104,14 +114,16 @@ class DynamixelOrinNode(Node):
             )
 
         if startup_torque:
-            self.controller.set_torque(self.profile["rx64_id"], True)
+            if bool(self.get_parameter("lift_enabled").value):
+                self.controller.set_torque(self.profile["rx64_id"], True)
             self.controller.set_torque(self.profile["rx28_id"], True)
 
         if startup_pose_enabled:
-            self.controller.set_position(
-                self.profile["rx64_id"], startup_rx64,
-                self.profile["rx64_min"], self.profile["rx64_max"]
-            )
+            if bool(self.get_parameter("lift_enabled").value):
+                self.controller.set_position(
+                    self.profile["rx64_id"], startup_rx64,
+                    self.profile["rx64_min"], self.profile["rx64_max"]
+                )
             self.controller.set_position(
                 self.profile["rx28_id"], startup_rx28,
                 self.profile["rx28_min"], self.profile["rx28_max"]
@@ -156,6 +168,9 @@ class DynamixelOrinNode(Node):
                     f"OK RX28 position={rx28_positions[command]} command={command}"
                 )
             elif command in rx64_positions:
+                if not bool(self.get_parameter("lift_enabled").value):
+                    self.publish_status("IGNORED lift disabled")
+                    return
                 self.controller.set_torque(self.profile["rx64_id"], True)
                 self.controller.set_position(
                     self.profile["rx64_id"],
@@ -207,6 +222,14 @@ class DynamixelOrinNode(Node):
             rx64_torque, rx28_torque = values[2:4]
         else:
             torque = values[2]
+
+        if not bool(self.get_parameter("lift_enabled").value):
+            rx64_raw = -1.0
+            if targeted_torque:
+                rx64_torque = -1.0
+            else:
+                rx64_torque, rx28_torque = -1.0, torque
+                targeted_torque = True
 
         try:
             if targeted_torque:

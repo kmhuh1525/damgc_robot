@@ -29,12 +29,12 @@
     approach_rx64_raw: -1           # -1 = do not move the arm while approaching
     rx64_min: 260
     rx64_max: 670
-    grasp_settle_time: 2.0          # s after the close command before continuing
-    # RX-64 speed 50 raw ~= 33 deg/s: 600 -> 300 raw (~87 deg) takes ~2.6 s.
-    lift_duration: 3.5
+    grasp_settle_time: 25.0         # speed 10; allow full RX-28 close travel
+    # RX-64 speed 10 raw ~= 6.7 deg/s: 600 -> 300 raw (~87 deg) takes ~13 s.
+    lift_duration: 14.0
     lift_ack_margin: 3.0
-    release_lower_time: 3.5
-    release_open_settle: 1.0
+    release_lower_time: 14.0
+    release_open_settle: 33.0         # include slower Follower open travel before release timeout
 
     # --- Step 3/4: Follower coordination ------------------------------------
     require_follower: true

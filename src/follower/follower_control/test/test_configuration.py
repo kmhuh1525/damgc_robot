@@ -38,3 +38,8 @@ def test_integrated_launch_overrides_only_the_input_topic() -> None:
     assert 'default_value="false"' in launch
     assert "velocity_guard.yaml" in launch
     assert "/follower/safe_cmd_vel" not in launch
+
+
+def test_demo_acceleration_limits_are_gentle():
+    assert yaml_value("max_linear_acceleration") == "0.05"
+    assert yaml_value("max_angular_acceleration") == "0.25"

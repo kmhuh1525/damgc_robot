@@ -79,12 +79,12 @@ class ApproachControllerNode(Node):
         # Deprecated no-op retained for compatibility with existing overrides.
         self.declare_parameter("sample_sync_tolerance", 0.10)
         # Retained for launch/config compatibility; perception owns final distance.
-        self.declare_parameter("target_forward", 0.25)
+        self.declare_parameter("target_forward", 0.242)
         self.declare_parameter("linear_gain", 0.20)
         self.declare_parameter("angular_gain", 0.80)
         self.declare_parameter("lateral_gain", 0.50)
-        self.declare_parameter("max_raw_linear_speed", 0.05)
-        self.declare_parameter("max_raw_angular_speed", 0.20)
+        self.declare_parameter("max_raw_linear_speed", 0.04)
+        self.declare_parameter("max_raw_angular_speed", 0.15)
         self.declare_parameter("near_max_angular_speed", 0.10)
         self.declare_parameter("max_final_linear_speed", 0.02)
         self.declare_parameter("max_final_angular_speed", 0.06)

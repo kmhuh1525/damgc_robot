@@ -8,6 +8,8 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("enabled", default_value="false"),
+        DeclareLaunchArgument("task_mode", default_value="false"),
+        DeclareLaunchArgument("open_wait", default_value="17.0"),
         DeclareLaunchArgument("robot", default_value="leader"),
         DeclareLaunchArgument("node_namespace", default_value=""),
         DeclareLaunchArgument("detection_topic", default_value="/leader/supply/detected"),
@@ -35,6 +37,8 @@ def generate_launch_description():
                     LaunchConfiguration("enabled"), value_type=bool
                 ),
                 "robot": LaunchConfiguration("robot"),
+                "task_mode": ParameterValue(LaunchConfiguration("task_mode"), value_type=bool),
+                "open_wait": ParameterValue(LaunchConfiguration("open_wait"), value_type=float),
                 "detection_topic": LaunchConfiguration("detection_topic"),
                 "alignment_topic": LaunchConfiguration("alignment_topic"),
                 "raw_command_topic": LaunchConfiguration("raw_command_topic"),

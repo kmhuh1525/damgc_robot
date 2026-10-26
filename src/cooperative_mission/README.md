@@ -1,5 +1,7 @@
 # cooperative_mission
 
+> **현재 시연은 팔로워 그리퍼 단독입니다.** [최신 실기 인계](../../docs/FOLLOWER_GRIPPER_DEMO_2026-10-27.md)를 먼저 확인하세요. 아래 리프트·운반 시나리오까지 이번에 재검증한 것은 아니며, 공용 모터 노드는 기본적으로 리프트를 차단합니다.
+
 리더·팔로워 두 로봇이 **하나의 물체를 양쪽에서 잡고, 동시에 들어 올린 뒤, 같은 방향으로
 1초간 직진**하는 전체 시나리오를 조정하는 ROS 2(Humble) 패키지다. 기존 인식·접근·안전
 파이프라인은 그대로 재사용하고, 그 위에 두 개의 미션 노드만 추가한다.
@@ -90,8 +92,10 @@ YAML보다 우선한다.
 | `transport_direction` | `forward` | 리더 base_link 기준 운반 방향 (`backward`면 launch가 리더 guard `allow_reverse`를 켬) |
 | `transport_speed` | 0.05 m/s | 순항 속도 (≤ 0.10) |
 | `transport_duration` | 1.0 s | 램프 포함 전체 이동 시간 |
-| `lift_raw` / `lower_raw` | Leader 300 / 600, Follower 20 / 270 | RX-64 들어올림 / 내려놓기 위치; Follower raw 20=최고, 270=최저 |
-| `lift_duration` | 3.5 s | RX-64 이동 대기 (속도 50에서 600→300 약 2.6 s) |
+| `lift_raw` / `lower_raw` | Leader 300 / 600, Follower 45 / 286 | RX-64 들어올림 / 내려놓기 위치; Follower raw 45=최고, 286=최저 |
+| `gripper_open_raw` / `gripper_close_raw` | Follower 1000 / 331 | RX-28 열림 / 실제 상자 집기 목표 (기계적 닫힘 끝점278) |
+| `rx64_speed` / `rx28_speed` | 협동 미션 Follower 10 / 10 | 이번 단독 시연 gripper는40이며 별도 실행 설정을 사용 |
+| `lift_duration` | 12.0 s | Follower RX-64 이동 대기 (speed 10의 전 구간 이동에 여유 포함) |
 | `reposition_segments` (팔로워) | `[""]` | 반대편까지 돌아가는 odometry 기동, 예 `["turn:90","drive:0.6","turn:-90"]` |
 
 리더 guard는 미션 전용 설정(`config/leader_velocity_guard_mission.yaml`)을 쓴다. 기존 대비
