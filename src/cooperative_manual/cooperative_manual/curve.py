@@ -69,6 +69,8 @@ class FollowerSmoother:
         self.measured=0.
         self.linear=0.
         self.angular=0.
+        self.acceleration=0.
+        self.moving=False
 
     def step(self,commanded,measured,dt,compute):
         dt=max(0.,min(.1,dt))
@@ -77,8 +79,15 @@ class FollowerSmoother:
             return CurveOutput(0.,0.)
         alpha=dt/(.25+dt)
         self.measured+=alpha*(min(abs(commanded)*1.5,abs(measured))-self.measured)
-        result=compute(math.copysign(self.measured,-commanded))
-        self.linear+=max(-.02*dt,min(.02*dt,result.linear-self.linear))
+        # Encoder noise around rest must not create repeated tiny drive pulses.
+        if self.moving:
+            if self.measured<.0007:self.moving=False
+        elif self.measured>.0015:self.moving=True
+        observed=math.copysign(self.measured,-commanded) if self.moving else 0.
+        result=compute(observed)
+        desired=max(-.012,min(.012,(result.linear-self.linear)/max(.20,dt)))
+        self.acceleration+=max(-.04*dt,min(.04*dt,desired-self.acceleration))
+        self.linear+=self.acceleration*dt
         self.angular+=max(-.04*dt,min(.04*dt,result.angular-self.angular))
         # Keep curvature bounded even while linear speed ramps down.
         self.angular=max(-2.5*abs(self.linear),min(2.5*abs(self.linear),self.angular))
@@ -186,6 +195,11 @@ class FollowerTrail:
         ex=math.cos(robot.yaw)*dx+math.sin(robot.yaw)*dy
         ey=-math.sin(robot.yaw)*dx+math.cos(robot.yaw)*dy
         yaw_error=normalize_angle(target.yaw-robot.yaw)
+        def deadzone(value,width):
+            return math.copysign(max(0.,abs(value)-width),value)
+        ex=deadzone(ex,.004)
+        ey=deadzone(ey,.004)
+        yaw_error=deadzone(yaw_error,.01)
         ratio,k=1.,0.
         if len(self.path)>=2:
             a,b=self.path[-2:];ds=self.arcs[-1]-self.arcs[-2]
@@ -197,8 +211,8 @@ class FollowerTrail:
         ff=-leader_linear*ratio
         # Large errors reduce speed continuously; there is no tracking-error FAULT.
         lateral_scale=max(.15,1./(1.+12.*abs(ey)+3.*abs(yaw_error)))
-        linear=direction*max(abs(ff)*.1,min(.04,direction*(ff*lateral_scale+.6*ex)))
-        angular=ff*k+direction*2.0*ey+.8*yaw_error
+        linear=direction*max(abs(ff)*.1,min(.04,abs(ff)*1.5,direction*(ff*lateral_scale+.3*ex)))
+        angular=ff*k+direction*1.0*ey+.5*yaw_error
         turn_limit=min(.08,min(2.5,self.geometry.curvature_limit(.8))*abs(linear))
         angular=max(-turn_limit,min(turn_limit,angular))
         distance=math.hypot(dx,dy)

@@ -115,4 +115,28 @@ def test_backward_straight_trail_and_signed_smoothing():
     assert follower.path[-1].x>origin.x+.09
     assert follower.output(origin,.02,1.).linear<0
     smoother=FollowerSmoother()
-    assert smoother.step(-.02,.02,.02,lambda v:CurveOutput(-v,0.)).linear<0
+    for _ in range(10):result=smoother.step(-.02,.02,.02,lambda v:CurveOutput(-v,0.))
+    assert result.linear<0
+
+
+def test_stationary_encoder_noise_does_not_start_follower():
+    from cooperative_manual.curve import FollowerSmoother,CurveOutput
+    smoother=FollowerSmoother()
+    for i in range(300):
+        result=smoother.step(.003,.0005 if i%2 else 0.,.02,
+            lambda v:CurveOutput(.02 if abs(v)>0 else 0.,0.))
+        assert result.linear==result.angular==0.
+
+
+def test_follower_acceleration_changes_gradually_with_step_corrections():
+    from cooperative_manual.curve import FollowerSmoother,CurveOutput
+    smoother=FollowerSmoother();last_v=last_a=0.
+    for i in range(500):
+        target=.03 if (i//50)%2==0 else .003
+        result=smoother.step(.02,.02,.02,lambda v:CurveOutput(target,0.))
+        acceleration=(result.linear-last_v)/.02
+        assert abs(acceleration)<=.01200001
+        assert abs(acceleration-last_a)<=.00080001
+        last_v,last_a=result.linear,acceleration
+    result=smoother.step(0.,.02,.02,lambda v:CurveOutput(.02,0.))
+    assert result.linear==result.angular==0.

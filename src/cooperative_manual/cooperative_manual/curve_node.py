@@ -42,7 +42,7 @@ class CurvedManualNode(ManualStraightNode):
         self.follow=FollowerTrail(self.geometry)
         self.trail_session=''
         self.observed_linear=0.;self.peer_observed_linear=0.
-        self.requested=0.;self.curvature_target=0.;self.curvature=0.;self.scale=1.
+        self.requested=0.;self.curvature_target=0.;self.curvature=0.;self.scale=1.;self.scale_target=1.
         self.smoother=FollowerSmoother();self.output_time=time.monotonic()
         self.feedback=CurveOutput(0.,0.)
         self.last_curve_tick=time.monotonic();self.last_trail_send=0.
@@ -77,7 +77,7 @@ class CurvedManualNode(ManualStraightNode):
         response=super().enable(request,response)
         if request.data and response.success:
             self.smoother.reset();self.output_time=time.monotonic()
-            self.initial_pose=self.pose;self.requested=0.;self.scale=1.;self.curvature=self.curvature_target=0.
+            self.initial_pose=self.pose;self.requested=0.;self.scale=self.scale_target=1.;self.curvature=self.curvature_target=0.
             self.trail_session=self.logic.session
             if self.role=='leader':self.trail.begin(self.pose)
             else:self.follow.reset(self.initial_pose)
@@ -102,7 +102,7 @@ class CurvedManualNode(ManualStraightNode):
             packet=json.loads(msg.data)
             if self.role=='leader' and packet.get('kind')=='STATUS':
                 if packet.get('session')!=self.logic.session or not packet.get('curve_ready'):return
-                self.scale=leader_scale(float(packet.get('lag',0.)),float(packet.get('cross_track',0.)))
+                self.scale_target=leader_scale(float(packet.get('lag',0.)),float(packet.get('cross_track',0.)))
             if self.role=='follower' and packet.get('kind')=='COMMAND':
                 v=packet.get('observed_linear')
                 if not isinstance(v,(float,int)) or not math.isfinite(v):raise ValueError('missing observed leader speed')
@@ -156,6 +156,7 @@ class CurvedManualNode(ManualStraightNode):
         if not hasattr(self,'trail'):return super().tick()
         now=time.monotonic();dt=min(.1,max(0.,now-self.last_curve_tick));self.last_curve_tick=now
         if self.role=='leader' and self.logic.enabled:
+            self.scale+=max(-.3*dt,min(.3*dt,(self.scale_target-self.scale)*dt/.5))
             self.logic.target=0. if self.grip.busy or self.need_neutral else self.requested*self.scale
             target=0. if self.grip.busy else self.curvature_target
             self.curvature+=max(-.25*dt,min(.25*dt,target-self.curvature))
