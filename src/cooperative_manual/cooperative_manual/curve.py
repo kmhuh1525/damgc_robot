@@ -46,7 +46,7 @@ def advance_follower(previous_leader,leader,follower,geometry):
     if abs(denominator)<.1:denominator=math.copysign(.1,denominator or -1.)
     distance=math.hypot(leader.x-previous_leader.x,leader.y-previous_leader.y)
     numerator=ux*(hl1[0]-hl0[0])+uy*(hl1[1]-hl0[1])-(length-2*b)*distance/max(2*b,.01)
-    ds=max(0.,min(3*distance,numerator/denominator))
+    ds=max(-3*distance,min(3*distance,numerator/denominator))
     dyaw=curvature*ds
     return Pose2D(follower.x+ds*math.cos(follower.yaw+dyaw/2),follower.y+ds*math.sin(follower.yaw+dyaw/2),normalize_angle(follower.yaw+dyaw))
 
@@ -77,11 +77,11 @@ class FollowerSmoother:
             return CurveOutput(0.,0.)
         alpha=dt/(.25+dt)
         self.measured+=alpha*(min(abs(commanded)*1.5,abs(measured))-self.measured)
-        result=compute(-self.measured)
+        result=compute(math.copysign(self.measured,-commanded))
         self.linear+=max(-.02*dt,min(.02*dt,result.linear-self.linear))
         self.angular+=max(-.04*dt,min(.04*dt,result.angular-self.angular))
         # Keep curvature bounded even while linear speed ramps down.
-        self.angular=max(-2.5*self.linear,min(2.5*self.linear,self.angular))
+        self.angular=max(-2.5*abs(self.linear),min(2.5*abs(self.linear),self.angular))
         return CurveOutput(self.linear,self.angular,result.lag,result.cross_track,result.position_error)
 
 
@@ -113,7 +113,6 @@ class LeaderTrail:
         dyaw=normalize_angle(pose.yaw-yaw)
         signed=math.cos(yaw+.5*dyaw)*dx+math.sin(yaw+.5*dyaw)*dy
         if abs(signed)<distance*.5:raise ValueError('leader odometry is not longitudinal')
-        if signed>0:raise ValueError('curve mode requires reverse-pulling leader; reprepare for another direction')
         measured=max(-1.,min(1.,dyaw/signed))
         alpha=distance/(.10+distance)
         k=k+alpha*(measured-k)
@@ -192,14 +191,15 @@ class FollowerTrail:
             a,b=self.path[-2:];ds=self.arcs[-1]-self.arcs[-2]
             dyaw=normalize_angle(b.yaw-a.yaw)
             signed=math.cos(a.yaw+.5*dyaw)*(b.x-a.x)+math.sin(a.yaw+.5*dyaw)*(b.y-a.y)
-            ratio=max(.5,min(1.5,signed/max(ds,1e-9)))
-            k=dyaw/max(abs(signed),.001)
-        ff=abs(leader_linear)*ratio
+            ratio=max(.5,min(1.5,abs(signed)/max(ds,1e-9)))
+            k=dyaw/math.copysign(max(abs(signed),.001),signed)
+        direction=1. if leader_linear<0 else -1.
+        ff=-leader_linear*ratio
         # Large errors reduce speed continuously; there is no tracking-error FAULT.
         lateral_scale=max(.15,1./(1.+12.*abs(ey)+3.*abs(yaw_error)))
-        linear=max(ff*.1,min(.04,ff*lateral_scale+.6*ex))
-        angular=ff*k+2.0*ey+.8*yaw_error
-        turn_limit=min(.08,min(2.5,self.geometry.curvature_limit(.8))*linear)
+        linear=direction*max(abs(ff)*.1,min(.04,direction*(ff*lateral_scale+.6*ex)))
+        angular=ff*k+direction*2.0*ey+.8*yaw_error
+        turn_limit=min(.08,min(2.5,self.geometry.curvature_limit(.8))*abs(linear))
         angular=max(-turn_limit,min(turn_limit,angular))
         distance=math.hypot(dx,dy)
         nearest_arc=self.arcs[0];cross=float('inf')

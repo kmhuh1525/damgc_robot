@@ -102,3 +102,17 @@ def test_follower_output_smooths_encoder_zero_pulses_and_stops_immediately():
     result=smoother.step(0.,.04,.02,lambda speed:CurveOutput(.04,.08))
     assert result.linear==result.angular==0.
     assert smoother.measured==0.
+
+
+def test_backward_straight_trail_and_signed_smoothing():
+    from cooperative_manual.curve import LeaderTrail,FollowerTrail,FollowerSmoother,CurveOutput,neutral_follower_pose
+    from cooperative_transport.motion import Pose2D
+    leader=LeaderTrail();leader.begin(Pose2D(0.,0.,0.))
+    follower=FollowerTrail();origin=neutral_follower_pose(Pose2D(0.,0.,0.),leader.geometry)
+    follower.reset(origin)
+    for i in range(1,21):leader.add(Pose2D(i*.005,0.,0.))
+    follower.receive(leader.packet('test'),1.)
+    assert follower.path[-1].x>origin.x+.09
+    assert follower.output(origin,.02,1.).linear<0
+    smoother=FollowerSmoother()
+    assert smoother.step(-.02,.02,.02,lambda v:CurveOutput(-v,0.)).linear<0

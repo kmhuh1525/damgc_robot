@@ -86,8 +86,10 @@ class CurvedManualNode(ManualStraightNode):
     def manual(self,msg):
         values=(msg.linear.x,msg.linear.y,msg.linear.z,msg.angular.x,msg.angular.y,msg.angular.z)
         if not self.logic.enabled:return
-        if not all(math.isfinite(x) for x in values) or any(abs(x)>1e-6 for x in values[1:5]) or msg.linear.x>1e-6:
-            self.logic.stop(time.monotonic(),'curve mode accepts reverse pull and yaw only');return
+        if not all(math.isfinite(x) for x in values) or any(abs(x)>1e-6 for x in values[1:5]):
+            self.logic.stop(time.monotonic(),'curve mode accepts longitudinal motion and yaw only');return
+        if msg.linear.x>0 and abs(msg.angular.z)>1e-6:
+            self.logic.stop(time.monotonic(),'backward return is straight only');return
         if abs(msg.linear.x)<.001 and abs(msg.angular.z)>1e-6:
             self.logic.stop(time.monotonic(),'in-place rotation forbidden while coupled');return
         self.curvature_target=max(-self.max_curvature,min(self.max_curvature,msg.angular.z/msg.linear.x)) if abs(msg.linear.x)>=.001 else 0.
@@ -105,7 +107,7 @@ class CurvedManualNode(ManualStraightNode):
                 v=packet.get('observed_linear')
                 if not isinstance(v,(float,int)) or not math.isfinite(v):raise ValueError('missing observed leader speed')
                 if packet.get('session')==self.logic.session:
-                    self.peer_observed_linear=min(0.,max(-.05,float(v)))
+                    self.peer_observed_linear=max(-.05,min(.05,float(v)))
             super().receive(msg)
             if self.role=='follower' and self.logic.session!=self.trail_session:
                 self.trail_session=self.logic.session;self.follow.reset(self.initial_pose)
