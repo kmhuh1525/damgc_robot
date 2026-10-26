@@ -13,4 +13,6 @@ setup(name='cooperative_manual', version='0.1.0', packages=['cooperative_manual'
                                       'manual_curve = cooperative_manual.curve_node:main',
                                       'manual_curve_keys = cooperative_manual.curve_keyboard:main',
                                       'follower_prepare = cooperative_manual.follower_prepare:main',
+                                      'opening_ceremony_probe = cooperative_manual.opening_prepare:main',
+                                      'opening_ceremony_keys = cooperative_manual.keyboard:opening_main',
                                       'manual_straight_keys = cooperative_manual.keyboard:main']})

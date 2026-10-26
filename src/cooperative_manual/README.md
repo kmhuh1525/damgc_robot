@@ -28,3 +28,5 @@
 - G/R은 양쪽 모터 준비 확인 후 session/action ID를 사용해 한 번씩 실행한다. 모터 ERROR/ACK3초 만료 시 베이스 정지, 마지막 그리퍼 목표 유지.
 - 리더 그리퍼 집기값은 미보정 기본값-1이므로 `gripper_enabled=true` 사용 시 반드시 확정된 `close_raw`를 지정한다. 팔로워 기본 집기331, 열림1000.
 - 기존 리더 mapping selector/bridge와 양쪽 Dynamixel 노드를 재사용한다. 이 패키지는 하드웨어 연결이나 Dynamixel 노드를 새로 만들지 않는다.
+
+개회식 직선 운반(키보드 열기·파지·지속 직진): [사용법](../../docs/OPENING_CEREMONY_TRANSPORT.md).

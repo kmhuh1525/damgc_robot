@@ -438,3 +438,5 @@ AprilTag controller가 이 토픽을 직접 publish하지 않습니다. 현재 �
 - [nvblox/Nav2 검증](src/leader/rescue_robot_bringup/docs/NVBLOX_NAV2_RVIZ.md)
 - [Leader AprilTag Drive 실행 가이드](src/leader/rescue_robot_bringup/docs/LEADER_APRILTAG_DRIVE_RUN_GUIDE.md)
 - [1차 구현·시험 기록](docs/progress/week%201/README.md)
+
+개회식 직선 운반(키보드 열기·파지·지속 직진): [사용법](docs/OPENING_CEREMONY_TRANSPORT.md).

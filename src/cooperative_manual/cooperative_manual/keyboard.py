@@ -16,13 +16,13 @@ from std_msgs.msg import String
 from std_srvs.srv import SetBool
 
 
-def main(args=None):
+def main(args=None, opening=False):
     if not sys.stdin.isatty():
         raise RuntimeError('interactive terminal required')
     stopped=threading.Event()
     for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda *_:stopped.set())
     rclpy.init(args=args,signal_handler_options=SignalHandlerOptions.NO)
-    node=Node('manual_straight_keys')
+    node=Node('opening_ceremony_keys' if opening else 'manual_straight_keys')
     pub=node.create_publisher(Twist,'/cooperation/manual/input',1)
     grip=node.create_publisher(String,'/cooperation/manual/gripper/request',10)
     enable=node.create_client(SetBool,'/leader/manual_straight/enable')
@@ -36,7 +36,9 @@ def main(args=None):
     def control(value):
         if enable.service_is_ready():pending.append(enable.call_async(SetBool.Request(data=value)))
         else:print('\r\nleader enable service unavailable',flush=True)
-    print('e=enable; HOLD UP/w=leader forward, DOWN/s=leader reverse (follower opposite); release/x=gentle stop; G=both grasp; R=both release; SPACE=abort bases; q=quit. No turns.',flush=True)
+    if opening:
+        print('개회식: E=준비; R=양쪽 열기; G=양쪽 파지; GRIP DONE 확인 후 ↑/W 한 번=계속 직진(리더 후진·서브 전진); ↓/S=직선 복귀; X=감속 정지; SPACE=비상정지; Q=종료. 키를 놓아도 계속 이동. 회전·리프트 없음.',flush=True)
+    else:print('e=enable; HOLD UP/w=leader forward, DOWN/s=leader reverse (follower opposite); release/x=gentle stop; G=both grasp; R=both release; SPACE=abort bases; q=quit. No turns.',flush=True)
     old=termios.tcgetattr(sys.stdin.fileno())
     last_hold,last_publish,direction=-10.,0.,0
     buffer=''
@@ -55,7 +57,8 @@ def main(args=None):
                             key={'A':'w','B':'s','C':'x','D':'x'}[buffer[2]];buffer=buffer[3:]
                         else:key='x';buffer=buffer[1:]
                     else:key,buffer=buffer[0].lower(),buffer[1:]
-                    if key in ('w','s'):direction=1 if key=='w' else -1;last_hold=time.monotonic()
+                    if key in ('w','s'):
+                        direction=(1 if key=='w' else -1)*(-1 if opening else 1);last_hold=time.monotonic()
                     elif key=='e':direction=0;control(True)
                     elif key in ('g','r'):
                         direction=0;pub.publish(Twist())
@@ -67,7 +70,7 @@ def main(args=None):
             now=time.monotonic()
             if now-last_publish>=.05:
                 command=Twist()
-                if now-last_hold<=.25:command.linear.x=direction*.03
+                if opening or now-last_hold<=.25:command.linear.x=direction*.03
                 pub.publish(command);last_publish=now
     finally:
         termios.tcsetattr(sys.stdin.fileno(),termios.TCSADRAIN,old)
@@ -77,3 +80,7 @@ def main(args=None):
             while time.monotonic()<end:rclpy.spin_once(node,timeout_sec=.02)
         node.destroy_node()
         if rclpy.ok():rclpy.shutdown()
+
+
+def opening_main(args=None):
+    main(args, opening=True)
