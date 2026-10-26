@@ -30,7 +30,15 @@ def test_one_key_cruise_stop_grip_and_abort():
         os.write(master,b'\x1b[A');spin(.9)
         assert commands[-1][1]==-.03 and commands[-1][2]==0.
         assert all(v==-.03 for t,v,w in commands if t>time.monotonic()-.4)
+        os.write(master,b'-');spin(.2);assert commands[-1][1]==-.025
+        os.write(master,b'+');spin(.2);assert commands[-1][1]==-.03
+        os.write(master,b'++++');spin(.2);assert commands[-1][1]==-.03
+        os.write(master,b'1');spin(.2);assert commands[-1][1]==-.01
+        os.write(master,b'----');spin(.2);assert commands[-1][1]==-.01
+        os.write(master,b'2');spin(.2);assert commands[-1][1]==-.02
         os.write(master,b'x');spin(.2);assert commands[-1][1]==0.
+        os.write(master,b'3');spin(.2);assert commands[-1][1]==0.
+
         os.write(master,b'\x1b[B');spin(.2);assert commands[-1][1]==.03
         os.write(master,b'g');spin(.3);assert grips[-1]=='GRASP' and commands[-1][1]==0.
         os.write(master,b'r');spin(.3);assert grips[-1]=='RELEASE'

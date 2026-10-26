@@ -37,9 +37,10 @@ def main(args=None, opening=False):
         if enable.service_is_ready():pending.append(enable.call_async(SetBool.Request(data=value)))
         else:print('\r\nleader enable service unavailable',flush=True)
     if opening:
-        print('개회식: E=준비; R=양쪽 열기; G=양쪽 파지; GRIP DONE 확인 후 ↑/W 한 번=계속 직진(리더 후진·서브 전진); ↓/S=직선 복귀; X=감속 정지; SPACE=비상정지; Q=종료. 키를 놓아도 계속 이동. 회전·리프트 없음.',flush=True)
+        print('개회식: E=준비; R=양쪽 열기; G=양쪽 파지; GRIP DONE 확인 후 ↑/W 한 번=계속 직진(리더 후진·서브 전진); ↓/S=직선 복귀; X=감속 정지; SPACE=비상정지; Q=종료. +/-=속도±0.005m/s; 1/2/3=0.01/0.02/0.03m/s (현재0.03). 키를 놓아도 계속 이동. 회전·리프트 없음.',flush=True)
     else:print('e=enable; HOLD UP/w=leader forward, DOWN/s=leader reverse (follower opposite); release/x=gentle stop; G=both grasp; R=both release; SPACE=abort bases; q=quit. No turns.',flush=True)
     old=termios.tcgetattr(sys.stdin.fileno())
+    speed=.03
     last_hold,last_publish,direction=-10.,0.,0
     buffer=''
     try:
@@ -59,6 +60,9 @@ def main(args=None, opening=False):
                     else:key,buffer=buffer[0].lower(),buffer[1:]
                     if key in ('w','s'):
                         direction=(1 if key=='w' else -1)*(-1 if opening else 1);last_hold=time.monotonic()
+                    elif opening and key in ('+','=','-','1','2','3'):
+                        speed=round(max(.01,min(.03,speed+(.005 if key in ('+','=') else -.005))),3) if key in ('+','=','-') else int(key)*.01
+                        print('\r\n운반 속도 %.3f m/s (%.1f cm/s), 현재 방향 유지; X=정지' % (speed,speed*100),flush=True)
                     elif key=='e':direction=0;control(True)
                     elif key in ('g','r'):
                         direction=0;pub.publish(Twist())
@@ -70,7 +74,7 @@ def main(args=None, opening=False):
             now=time.monotonic()
             if now-last_publish>=.05:
                 command=Twist()
-                if opening or now-last_hold<=.25:command.linear.x=direction*.03
+                if opening or now-last_hold<=.25:command.linear.x=direction*speed
                 pub.publish(command);last_publish=now
     finally:
         termios.tcsetattr(sys.stdin.fileno(),termios.TCSADRAIN,old)
