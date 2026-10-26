@@ -207,3 +207,16 @@ def test_disabled_lift_rejects_semantic_motion():
     DynamixelOrinNode.gripper_command_callback(harness, SimpleNamespace(data="rx64_high"))
     assert not harness.calls
     assert harness.statuses == ["IGNORED lift disabled"]
+
+
+def test_manual_shutdown_can_preserve_gripper_hold(monkeypatch):
+    from rclpy.node import Node
+    monkeypatch.setattr(Node,'destroy_node',lambda self:True)
+    class Harness(DynamixelOrinNode):
+        def __init__(self):pass
+    h=Harness();calls=[]
+    h.profile={'rx64_id':50,'rx28_id':1}
+    h.controller=SimpleNamespace(set_torque=lambda *args:calls.append(args),close=lambda:calls.append('closed'))
+    h.get_parameter=lambda name:SimpleNamespace(value=False)
+    DynamixelOrinNode.destroy_node(h)
+    assert calls==['closed']

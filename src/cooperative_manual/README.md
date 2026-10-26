@@ -15,6 +15,8 @@
 
 회전과 리프트는 제외한다. 그리퍼 동작 동안 주행은 잠기며, 완료 후 키를 한 번 놓아야 다시 움직인다. 모터 명령 시작의 완벽한 동시성/물리 파지 성공은 보장하지 않는다.
 
+서브 한 줄 준비: `~/damgc_robot_mission/scripts/run_follower_manual.sh`
+
 **다운로드·설정·실행:** [리더 인계 문서](../../docs/MANUAL_STRAIGHT_TRANSPORT_HANDOFF.md).
 
 - motion/drive/bridge/I2C/gripper는 기본 비활성화.

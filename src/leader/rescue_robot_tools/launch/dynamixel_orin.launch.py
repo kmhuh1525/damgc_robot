@@ -17,6 +17,7 @@ def generate_launch_description():
         DeclareLaunchArgument("startup_rx28_raw", default_value="500"),
         DeclareLaunchArgument("startup_torque", default_value="true"),
         DeclareLaunchArgument("startup_pose_enabled", default_value="true"),
+        DeclareLaunchArgument("shutdown_torque_off", default_value="true"),
         Node(
             package="rescue_robot_tools",
             executable="dynamixel_orin_node.py",
@@ -29,6 +30,7 @@ def generate_launch_description():
                     LaunchConfiguration("baudrate"), value_type=int
                 ),
                 "robot": LaunchConfiguration("robot"),
+                "shutdown_torque_off": ParameterValue(LaunchConfiguration("shutdown_torque_off"), value_type=bool),
                 "lift_enabled": ParameterValue(LaunchConfiguration("lift_enabled"), value_type=bool),
                 "rx64_speed": ParameterValue(
                     LaunchConfiguration("rx64_speed"), value_type=int

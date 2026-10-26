@@ -36,6 +36,7 @@ class DynamixelOrinNode(Node):
         self.declare_parameter("startup_rx28_raw", 500)
         self.declare_parameter("startup_torque", True)
         self.declare_parameter("startup_pose_enabled", True)
+        self.declare_parameter("shutdown_torque_off", True)
 
         robot = str(self.get_parameter("robot").value)
         self.profile = get_profile(robot)
@@ -282,11 +283,12 @@ class DynamixelOrinNode(Node):
 
     def destroy_node(self):
         if self.controller is not None:
-            try:
-                self.controller.set_torque(self.profile["rx64_id"], False)
-                self.controller.set_torque(self.profile["rx28_id"], False)
-            except Exception as exc:
-                self.get_logger().error(f"failed to disable torque: {exc}")
+            if bool(self.get_parameter("shutdown_torque_off").value):
+                try:
+                    self.controller.set_torque(self.profile["rx64_id"], False)
+                    self.controller.set_torque(self.profile["rx28_id"], False)
+                except Exception as exc:
+                    self.get_logger().error(f"failed to disable torque: {exc}")
             self.controller.close()
         super().destroy_node()
 
