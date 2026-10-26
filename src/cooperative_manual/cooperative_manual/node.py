@@ -24,8 +24,8 @@ from .grip import PairedGrip
 
 class ManualStraightNode(Node):
     def __init__(self, **kwargs):
-        super().__init__('manual_straight', **kwargs)
-        for name, value in {'role':'leader', 'motion_enabled':False, 'speed':.03, 'acceleration':.03, 'timeout':.25, 'command_topic':''}.items():
+        super().__init__(getattr(self,'NODE_NAME','manual_straight'), **kwargs)
+        for name, value in {'role':'leader', 'motion_enabled':False, 'speed':getattr(self,'DEFAULT_SPEED',.03), 'acceleration':getattr(self,'DEFAULT_ACCELERATION',.03), 'timeout':.25, 'command_topic':''}.items():
             self.declare_parameter(name, value)
         self.role = self.get_parameter('role').value
         self.logic = StraightSync(self.role, Limits(speed=self.get_parameter('speed').value, acceleration=self.get_parameter('acceleration').value, timeout=self.get_parameter('timeout').value))
@@ -35,18 +35,19 @@ class ManualStraightNode(Node):
         self.create_subscription(Odometry, self.get_parameter('odom_topic').value, self.odometry, rclpy.qos.qos_profile_sensor_data)
         self.command_topic = self.get_parameter('command_topic').value or ('/leader/cooperation/cmd_vel' if self.role == 'leader' else '/follower/mission/cmd_vel')
         self.cmd = self.create_publisher(Twist, self.command_topic, 1)
-        self.wire = self.create_publisher(String, '/cooperation/manual/' + self.role, 1)
-        self.status = self.create_publisher(String, '/cooperation/manual/' + self.role + '/status', 10)
-        self.create_subscription(String, '/cooperation/manual/' + ('follower' if self.role == 'leader' else 'leader'), self.receive, 1)
+        self.transport_prefix=getattr(self,'TRANSPORT_PREFIX','/cooperation/manual')
+        self.wire = self.create_publisher(String, self.transport_prefix+'/' + self.role, 1)
+        self.status = self.create_publisher(String, self.transport_prefix+'/' + self.role + '/status', 10)
+        self.create_subscription(String, self.transport_prefix+'/' + ('follower' if self.role == 'leader' else 'leader'), self.receive, 1)
         self.create_subscription(ParameterEvent, '/parameter_events', self.ownership, 10)
         self.selector_name = '/' + self.role + '/command_selector'
         self.selector = self.create_client(SetParameters, self.selector_name + '/set_parameters')
         self.guard = self.create_client(SetBool, '/follower/velocity_guard/enable') if self.role == 'follower' else None
         self.guard_config = self.create_client(GetParameters,'/follower/velocity_guard/get_parameters') if self.guard else None
         self.future_kind = ''
-        self.create_service(SetBool, 'manual_straight/enable', self.enable)
+        self.create_service(SetBool, getattr(self,'ENABLE_SERVICE','manual_straight/enable'), self.enable)
         if self.role == 'leader':
-            self.create_subscription(Twist, '/cooperation/manual/input', self.manual, 1)
+            self.create_subscription(Twist, self.transport_prefix+'/input', self.manual, 1)
         self.controls = []
         self.future = None
         self.future_deadline = 0.
@@ -127,7 +128,7 @@ class ManualStraightNode(Node):
         if self.count_publishers(self.command_topic) != 1:
             response.message = 'conflicting command publisher; stop other transport/missions first'
             return response
-        if self.count_publishers('/cooperation/manual/' + self.role) != 1:
+        if self.count_publishers(self.transport_prefix+'/' + self.role) != 1:
             response.message = 'duplicate manual peer'
             return response
         if self.grip.phase=='ERROR':
@@ -189,15 +190,21 @@ class ManualStraightNode(Node):
             if self.logic.enabled:
                 self.logic.stop(time.monotonic(), 'invalid packet: ' + str(exc))
 
+    def prepare_command(self,value,now):
+        command=Twist();command.linear.x=value
+        return command
+
+    def decorate_packet(self,packet):return packet
+
     def tick(self):
         now = time.monotonic()
         if self.logic.enabled and now - self.last_health >= .1:
             self.last_health = now
             if self.odom_time is None or now - self.odom_time > .35:
                 self.logic.stop(now, 'odometry timeout')
-            if self.role == 'leader' and self.count_publishers('/cooperation/manual/input') > 1:
+            if self.role == 'leader' and self.count_publishers(self.transport_prefix+'/input') > 1:
                 self.logic.stop(now, 'conflicting manual input publishers')
-            if self.count_publishers(self.command_topic) != 1 or self.count_publishers('/cooperation/manual/' + self.role) != 1:
+            if self.count_publishers(self.command_topic) != 1 or self.count_publishers(self.transport_prefix+'/' + self.role) != 1:
                 self.logic.stop(now, 'conflicting publisher')
         if self.logic.state == 'ARMING':
             try:
@@ -245,11 +252,11 @@ class ManualStraightNode(Node):
         if not self.logic.enabled and not self.released:
             self.release()
         if self.logic.enabled or now <= self.logic.stop_until:
-            cmd = Twist()
-            cmd.linear.x = value
-            self.cmd.publish(cmd)
+            try:self.cmd.publish(self.prepare_command(value,now))
+            except ValueError as exc:
+                self.logic.stop(now,str(exc));self.release()
         for packet in packets:
-            self.wire.publish(String(data=json.dumps(packet, allow_nan=False, separators=(',', ':'))))
+            self.wire.publish(String(data=json.dumps(self.decorate_packet(packet), allow_nan=False, separators=(',', ':'))))
         description = self.logic.state + ': ' + self.logic.reason
         self.status.publish(String(data=description))
         if description != self.last_state:

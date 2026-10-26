@@ -26,12 +26,13 @@ def create(context):
             actions.append(GroupAction(scoped=True, actions=[SetRemap(src='cmd_vel',dst='/follower/safe_cmd_vel'), include('stm32_bridge','stm32_bridge.launch.py',{'namespace':'follower','transport':'i2c','i2c_device':get('i2c_device'),'i2c_address':'66','i2c_write_enabled':get('i2c_write_enabled')})]))
     elif get('use_stm32_bridge') == 'true':
         raise ValueError('use_stm32_bridge requires follower drive_nodes=true')
-    actions.append(Node(package='cooperative_manual', executable='manual_straight', namespace=role, name='manual_straight', output='screen', parameters=[{'role':role,'motion_enabled':get('motion_enabled')=='true','command_topic':command,'speed':.03,'acceleration':.03,'timeout':.25,'gripper_enabled':get('gripper_enabled')=='true','open_raw':int(get('open_raw')),'close_raw':int(get('close_raw')) if get('close_raw') else (331 if role=='follower' else -1),'gripper_settle':float(get('gripper_settle')) if get('gripper_settle') else (9. if role=='follower' else 25.)}]))
+    actions.append(Node(package='cooperative_manual', executable='manual_curve' if get('peer_mode')=='curve' else 'manual_straight', namespace=role, name='manual_curve' if get('peer_mode')=='curve' else 'manual_straight', output='screen', parameters=[{'role':role,'motion_enabled':get('motion_enabled')=='true','command_topic':command,'speed':.02 if get('peer_mode')=='curve' else .03,'acceleration':.02 if get('peer_mode')=='curve' else .03,'timeout':.25,'gripper_enabled':get('gripper_enabled')=='true','open_raw':int(get('open_raw')),'close_raw':int(get('close_raw')) if get('close_raw') else (331 if role=='follower' else -1),'gripper_settle':float(get('gripper_settle')) if get('gripper_settle') else (9. if role=='follower' else 25.)}]))
     return actions
 
 
 def generate_launch_description():
     return LaunchDescription([
+        DeclareLaunchArgument('peer_mode',default_value='straight',choices=['straight','curve']),
         DeclareLaunchArgument('role',default_value='leader',choices=['leader','follower']),
         DeclareLaunchArgument('motion_enabled',default_value='false',choices=['true','false']),
         DeclareLaunchArgument('drive_nodes',default_value='false',choices=['true','false']),

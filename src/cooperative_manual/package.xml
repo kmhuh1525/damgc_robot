@@ -12,6 +12,7 @@
   <exec_depend>follower_command_selector</exec_depend><exec_depend>follower_control</exec_depend>
   <exec_depend>stm32_bridge</exec_depend>
   <exec_depend>rescue_robot_tools</exec_depend>
+  <exec_depend>cooperative_transport</exec_depend>
   <test_depend>python3-pytest</test_depend>
   <export><build_type>ament_python</build_type></export>
 </package>
