@@ -1,5 +1,7 @@
 # 프로젝트 문서
 
+- [수동 직선 운반 리더 인계](MANUAL_STRAIGHT_TRANSPORT_HANDOFF.md) — 신규 패키지 선택 다운로드, 양쪽 enable, 전용 키보드, watchdog 및 무구동 검사
+
 - **최신 팔로워 시연·리더 인계:** [2026-10-27 자동 인식·접근·그리퍼 집기](FOLLOWER_GRIPPER_DEMO_2026-10-27.md)
 
 이 폴더는 `damgc_robot`의 계획, 현재 상태, 시스템 인터페이스와 시험 근거를
