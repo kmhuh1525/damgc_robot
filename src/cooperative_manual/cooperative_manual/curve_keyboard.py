@@ -30,7 +30,7 @@ def main(args=None):
     def control(value):
         if enable.service_is_ready():pending.append(enable.call_async(SetBool.Request(data=value)))
         else:print('\r\ncurve enable service unavailable',flush=True)
-    print('EXPERIMENTAL CURVE: e=enable after follower; hold w/UP=reverse pull; a/LEFT,d/RIGHT=curve while moving; s/DOWN/x=stop; G/R=paired grip/release; SPACE=abort; q=exit. No in-place turns.',flush=True)
+    print('EXPERIMENTAL CURVE: e=enable after follower; hold w/UP=straight reverse pull; hold a/LEFT,d/RIGHT=reverse curve (one key); s/DOWN/x=stop; G/R=paired grip/release; SPACE=abort; q=exit. No in-place turns.',flush=True)
     old=termios.tcgetattr(sys.stdin.fileno());buffer='';moving=False;last_move=-10.;turn=0.;last_turn=-10.;last_publish=0.
     try:
         tty.setcbreak(sys.stdin.fileno())
@@ -48,8 +48,8 @@ def main(args=None):
                         else:key='x';buffer=buffer[1:]
                     else:key,buffer=buffer[0].lower(),buffer[1:]
                     now=time.monotonic()
-                    if key=='w':moving=True;last_move=now
-                    elif key in ('a','d') and moving and now-last_move<=.3:turn=1. if key=='a' else -1.;last_turn=last_move=now
+                    if key=='w':moving=True;turn=0.;last_move=now
+                    elif key in ('a','d'):moving=True;turn=1. if key=='a' else -1.;last_turn=last_move=now
                     elif key in ('s','x'):moving=False;turn=0.
                     elif key=='e':moving=False;control(True)
                     elif key in ('g','r'):
@@ -62,7 +62,7 @@ def main(args=None):
                 msg=Twist()
                 if moving and now-last_move<=.25:
                     msg.linear.x=-.02
-                    if now-last_turn<=.25:msg.angular.z=turn*.02
+                    msg.angular.z=turn*.02
                 pub.publish(msg);last_publish=now
     finally:
         termios.tcsetattr(sys.stdin.fileno(),termios.TCSADRAIN,old)

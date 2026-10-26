@@ -15,7 +15,7 @@ from std_msgs.msg import String
 
 from cooperative_transport.motion import Pose2D,normalize_angle
 from cooperative_transport.hinged_formation import HingeGeometry
-from .curve import LeaderTrail,FollowerTrail,CurveOutput,leader_scale
+from .curve import LeaderTrail,FollowerTrail,CurveOutput,leader_scale,FollowerSmoother
 from .node import ManualStraightNode
 
 
@@ -43,6 +43,7 @@ class CurvedManualNode(ManualStraightNode):
         self.trail_session=''
         self.observed_linear=0.;self.peer_observed_linear=0.
         self.requested=0.;self.curvature_target=0.;self.curvature=0.;self.scale=1.
+        self.smoother=FollowerSmoother();self.output_time=time.monotonic()
         self.feedback=CurveOutput(0.,0.)
         self.last_curve_tick=time.monotonic();self.last_trail_send=0.
         self.trail_wire=self.create_publisher(String,'/cooperation/curve/trail',1) if self.role=='leader' else None
@@ -75,6 +76,7 @@ class CurvedManualNode(ManualStraightNode):
             response.message='fresh pose odometry required for curve mode';return response
         response=super().enable(request,response)
         if request.data and response.success:
+            self.smoother.reset();self.output_time=time.monotonic()
             self.initial_pose=self.pose;self.requested=0.;self.scale=1.;self.curvature=self.curvature_target=0.
             self.trail_session=self.logic.session
             if self.role=='leader':self.trail.begin(self.pose)
@@ -135,16 +137,16 @@ class CurvedManualNode(ManualStraightNode):
 
     def prepare_command(self,value,now):
         command=Twist()
-        if abs(value)<1e-8:return command
+        dt=now-self.output_time;self.output_time=now
+        if abs(value)<1e-8:
+            self.smoother.reset()
+            return command
         if self.role=='leader':
             command.linear.x=value;command.angular.z=value*self.curvature
         else:
             # Follow measured motion, not a fictitious desired moving leader.
-            observed=-min(abs(value)*1.5,abs(self.peer_observed_linear))
-            if abs(observed)<.001:
-                self.feedback=CurveOutput(0.,0.)
-                return command
-            self.feedback=self.follow.output(self.pose,observed,now)
+            self.feedback=self.smoother.step(value,self.peer_observed_linear,dt,
+                lambda observed:self.follow.output(self.pose,observed,now))
             command.linear.x=self.feedback.linear;command.angular.z=self.feedback.angular
         return command
 

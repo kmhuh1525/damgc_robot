@@ -80,3 +80,7 @@ ros2 topic echo /cooperation/curve/leader/status
 source /opt/ros/humble/setup.bash
 colcon build --packages-select cooperative_transport cooperative_manual --symlink-install
 ```
+
+
+### 저속 튐과 터미널 조향 보정
+서브는 리더 실측 속도를 0.25초 저역통과 필터로 평활화하고 최종 선속도 가속도 0.02 m/s², 각가속도 0.04 rad/s²로 제한한다. 명시적 정지는 즉시 0이다. 터미널 동시 키 입력 대신 ↑/W 하나를 유지하면 직진, ←/A 하나는 좌곡선, →/D 하나는 우곡선이며 키를 놓으면 정지한다. 리더 키보드 노드도 새 코드로 재시작해야 한다.

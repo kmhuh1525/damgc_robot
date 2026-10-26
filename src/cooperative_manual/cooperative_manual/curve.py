@@ -60,6 +60,31 @@ class CurveOutput:
     position_error: float=0.
 
 
+class FollowerSmoother:
+    """Smooth quantized wheel speed and bound final follower acceleration."""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.measured=0.
+        self.linear=0.
+        self.angular=0.
+
+    def step(self,commanded,measured,dt,compute):
+        dt=max(0.,min(.1,dt))
+        if abs(commanded)<1e-8:
+            self.reset()
+            return CurveOutput(0.,0.)
+        alpha=dt/(.25+dt)
+        self.measured+=alpha*(min(abs(commanded)*1.5,abs(measured))-self.measured)
+        result=compute(-self.measured)
+        self.linear+=max(-.02*dt,min(.02*dt,result.linear-self.linear))
+        self.angular+=max(-.04*dt,min(.04*dt,result.angular-self.angular))
+        # Keep curvature bounded even while linear speed ramps down.
+        self.angular=max(-2.5*self.linear,min(2.5*self.linear,self.angular))
+        return CurveOutput(self.linear,self.angular,result.lag,result.cross_track,result.position_error)
+
+
 class LeaderTrail:
     def __init__(self,geometry=CURVE_GEOMETRY,step=.005,capacity=512):
         geometry.validate()

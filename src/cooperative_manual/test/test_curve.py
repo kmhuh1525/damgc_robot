@@ -86,3 +86,19 @@ def test_reverse_curvature_estimate_uses_signed_distance():
 def test_sensor_reset_is_distinct_from_tracking_error():
     trail=LeaderTrail();trail.begin(Pose2D(0.,0.,0.))
     with pytest.raises(ValueError,match='discontinuity'):trail.add(Pose2D(1.,0.,0.))
+
+
+def test_follower_output_smooths_encoder_zero_pulses_and_stops_immediately():
+    from cooperative_manual.curve import FollowerSmoother,CurveOutput
+    smoother=FollowerSmoother()
+    previous=CurveOutput(0.,0.)
+    for i in range(200):
+        result=smoother.step(-.02,.04 if i%2 else 0.,.02,
+            lambda speed:CurveOutput(abs(speed),abs(speed)*2))
+        assert abs(result.linear-previous.linear)<=.000400001
+        assert abs(result.angular-previous.angular)<=.000800001
+        if i>50:assert result.linear>.005
+        previous=result
+    result=smoother.step(0.,.04,.02,lambda speed:CurveOutput(.04,.08))
+    assert result.linear==result.angular==0.
+    assert smoother.measured==0.
