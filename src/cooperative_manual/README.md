@@ -30,3 +30,5 @@
 - 기존 리더 mapping selector/bridge와 양쪽 Dynamixel 노드를 재사용한다. 이 패키지는 하드웨어 연결이나 Dynamixel 노드를 새로 만들지 않는다.
 
 개회식 직선 운반(키보드 열기·파지·지속 직진): [사용법](../../docs/OPENING_CEREMONY_TRANSPORT.md).
+
+시연 시작 신호→양쪽 파지→메인 경로 운반: [연동 사용법](../../docs/DEMO_SCENARIO_TRANSPORT.md).

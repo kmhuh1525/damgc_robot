@@ -10,6 +10,7 @@ setup(name='cooperative_manual', version='0.1.0', packages=['cooperative_manual'
       description='Straight-only paired manual transport with explicit arming and watchdogs',
       tests_require=['pytest'],
       entry_points={'console_scripts':['manual_straight = cooperative_manual.node:main',
+                                      'demo_transport = cooperative_manual.demo_node:main',
                                       'manual_curve = cooperative_manual.curve_node:main',
                                       'manual_curve_keys = cooperative_manual.curve_keyboard:main',
                                       'follower_prepare = cooperative_manual.follower_prepare:main',

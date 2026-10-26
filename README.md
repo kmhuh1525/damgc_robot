@@ -440,3 +440,5 @@ AprilTag controller가 이 토픽을 직접 publish하지 않습니다. 현재 �
 - [1차 구현·시험 기록](docs/progress/week%201/README.md)
 
 개회식 직선 운반(키보드 열기·파지·지속 직진): [사용법](docs/OPENING_CEREMONY_TRANSPORT.md).
+
+시연 시작 신호→양쪽 파지→메인 경로 운반: [연동 사용법](docs/DEMO_SCENARIO_TRANSPORT.md).
